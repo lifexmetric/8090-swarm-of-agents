@@ -19,7 +19,7 @@ func transferURL() string {
 		baseURL = "http://localhost:9999"
 	}
 	// THE CRITICAL PATH: changing /v2/transfers → /v3/transfers breaks all payments
-	return baseURL + "/v2/transfers"
+	return baseURL + "/v3/transfers"
 }
 
 // CheckConnectivity does a lightweight GET probe against the configured SWIFT path.
