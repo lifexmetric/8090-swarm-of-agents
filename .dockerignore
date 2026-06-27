@@ -1,0 +1,15 @@
+.git
+.atlas
+.env
+.env.*
+!.env.example
+node_modules
+api/node_modules
+web/node_modules
+dist
+api/dist
+web/.next
+platform/data
+scan-engine/models
+*.log
+.DS_Store
