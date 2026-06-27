@@ -41,6 +41,12 @@ export interface PublicPullRequest {
   changedFiles: PullRequestChangedFile[];
   commits: PullRequestCommit[];
   hunks: PullRequestHunk[];
+  fetchCompleteness: {
+    filesTruncated: boolean;
+    commitsTruncated: boolean;
+    filePagesFetched: number;
+    commitPagesFetched: number;
+  };
 }
 
 interface GitHubPrResponse {
@@ -110,34 +116,52 @@ async function fetchJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function fetchPaged<T>(url: string): Promise<T[]> {
-  const items: T[] = [];
-  for (let page = 1; page <= 8; page += 1) {
-    const joiner = url.includes("?") ? "&" : "?";
-    const batch = await fetchJson<T[]>(`${url}${joiner}per_page=100&page=${page}`);
-    items.push(...batch);
-    if (batch.length < 100) break;
+function nextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(",")) {
+    const [rawUrl, rawRel] = part.split(";").map((item) => item.trim());
+    if (rawRel === 'rel="next"') return rawUrl.replace(/^<|>$/g, "");
   }
-  return items;
+  return null;
+}
+
+async function fetchPaged<T>(url: string, maxPages = 30): Promise<{ items: T[]; truncated: boolean; pagesFetched: number }> {
+  const items: T[] = [];
+  let next: string | null = `${url}${url.includes("?") ? "&" : "?"}per_page=100&page=1`;
+  let pagesFetched = 0;
+  while (next && pagesFetched < maxPages) {
+    const response = await fetch(next, { headers: headers() });
+    if (!response.ok) {
+      const status = response.status === 404 ? "not found or not public" : `returned ${response.status}`;
+      throw Object.assign(new Error(`GitHub PR fetch failed: ${status}`), { statusCode: response.status === 404 ? 404 : 502 });
+    }
+    const batch = await response.json() as T[];
+    items.push(...batch);
+    pagesFetched += 1;
+    next = nextLink(response.headers.get("link"));
+  }
+  return { items, truncated: Boolean(next), pagesFetched };
 }
 
 export async function fetchPublicPullRequest(input: string): Promise<PublicPullRequest> {
   const ref = parseGitHubPullRequestUrl(input);
   if (!ref) throw Object.assign(new Error("Invalid GitHub pull request URL"), { statusCode: 400 });
   const apiBase = `https://api.github.com/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`;
-  const [pr, files, commits] = await Promise.all([
+  const [pr, filesPage, commitsPage] = await Promise.all([
     fetchJson<GitHubPrResponse>(apiBase),
     fetchPaged<GitHubFileResponse>(`${apiBase}/files`),
     fetchPaged<GitHubCommitResponse>(`${apiBase}/commits`),
   ]);
 
-  const changedFiles = files.map((file) => ({
+  const changedFiles = filesPage.items.map((file) => ({
     filename: file.filename,
     status: file.status,
     additions: file.additions,
     deletions: file.deletions,
     changes: file.changes,
     patch: file.patch ? redactSecrets(file.patch) : undefined,
+    patchStatus: file.patch ? "available" as const : "missing" as const,
+    patchUnavailableReason: file.patch ? undefined : patchUnavailableReason(file),
   }));
 
   return {
@@ -162,14 +186,27 @@ export async function fetchPublicPullRequest(input: string): Promise<PublicPullR
       sha: pr.head.sha,
     },
     changedFiles,
-    commits: commits.map((commit) => ({
+    commits: commitsPage.items.map((commit) => ({
       sha: commit.sha,
       message: redactSecrets((commit.commit?.message ?? "").split("\n")[0] ?? "").slice(0, 300),
       author: commit.author?.login ?? commit.commit?.author?.name ?? null,
       date: commit.commit?.author?.date ?? null,
     })),
     hunks: changedFiles.flatMap((file) => parsePatchHunks(file.filename, file.patch ?? "")),
+    fetchCompleteness: {
+      filesTruncated: filesPage.truncated,
+      commitsTruncated: commitsPage.truncated,
+      filePagesFetched: filesPage.pagesFetched,
+      commitPagesFetched: commitsPage.pagesFetched,
+    },
   };
+}
+
+function patchUnavailableReason(file: GitHubFileResponse): string {
+  if (file.status === "removed") return "GitHub did not provide patch text for this removed file.";
+  if (file.status === "renamed") return "GitHub did not provide patch text for this renamed or moved file.";
+  if (file.status === "changed" || file.status === "modified") return "GitHub did not provide patch text, commonly because the file is binary or the patch is too large.";
+  return `GitHub did not provide patch text for ${file.status} file.`;
 }
 
 export function parsePatchHunks(filePath: string, patch: string): PullRequestHunk[] {

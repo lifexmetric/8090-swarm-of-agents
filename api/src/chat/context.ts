@@ -323,70 +323,29 @@ export function buildChatContext(args: {
 
   const citations: ChatCitation[] = [];
   const seenEvidence = new Set<string>();
-  for (const node of nodes) {
-    for (const evidence of node.evidence ?? []) {
-      const citation = citationFromEvidence({
-        index: citations.length + 1,
-        subjectType: "node",
-        subjectId: node.id,
-        repositoryId: node.repositoryId,
-        scan: node.repositoryId ? latestScanByRepoId.get(node.repositoryId) : undefined,
-        label: node.label,
-        confidence: node.confidence,
-        evidence,
-      });
-      const key = evidenceKey(citation);
-      if (!seenEvidence.has(key)) {
-        seenEvidence.add(key);
-        citations.push(citation);
-      }
-      if (citations.length >= MAX_EVIDENCE) break;
-    }
-    if (citations.length >= MAX_EVIDENCE) break;
-  }
-  for (const edge of edges) {
-    for (const evidence of edge.evidence ?? []) {
-      const source = nodesById.get(edge.source)?.label ?? edge.source;
-      const target = nodesById.get(edge.target)?.label ?? edge.target;
-      const citation = citationFromEvidence({
-        index: citations.length + 1,
-        subjectType: "edge",
-        subjectId: edge.id,
-        repositoryId: edge.repositoryId,
-        scan: edge.repositoryId ? latestScanByRepoId.get(edge.repositoryId) : undefined,
-        label: `${source} -> ${target}`,
-        confidence: edge.confidence,
-        evidence,
-      });
-      const key = evidenceKey(citation);
-      if (!seenEvidence.has(key)) {
-        seenEvidence.add(key);
-        citations.push(citation);
-      }
-      if (citations.length >= MAX_EVIDENCE) break;
-    }
-    if (citations.length >= MAX_EVIDENCE) break;
-  }
   if (handoff) {
     for (const mapping of handoff.mappings) {
       for (const node of mapping.nodes) {
         if (!node.evidenceId || citations.length >= MAX_EVIDENCE) continue;
+        const weak = node.basis === "same-file";
         const citation: ChatCitation = {
           id: `E${citations.length + 1}`,
           stableId: node.evidenceId,
-          label: `PR #${handoff.number} touches ${node.label}`,
+          label: weak
+            ? `PR #${handoff.number} has same-file proximity to ${node.label}; verify exact impact`
+            : `PR #${handoff.number} exactly overlaps ${node.label}`,
           subjectType: "node",
           subjectId: node.nodeId,
           repositoryId: handoff.repositoryId ?? undefined,
           scanId: handoff.scanId ?? undefined,
-          commitSha: handoff.head.sha,
+          commitSha: node.provenance.scanCommitSha ?? null,
           filePath: mapping.filePath,
           lineStart: node.lineStart,
           lineEnd: node.lineEnd,
           snippet: redactSecrets(node.snippet).slice(0, 600),
           detector: node.detector,
-          confidenceReason: node.reason,
-          confidence: node.confidence,
+          confidenceReason: `${node.reason} Evidence came from scan commit ${node.provenance.scanCommitSha ?? "unknown"}, not PR head ${handoff.head.sha}.`,
+          confidence: weak ? "inferred" : node.confidence,
         };
         const key = evidenceKey(citation);
         if (!seenEvidence.has(key)) {
@@ -396,28 +355,76 @@ export function buildChatContext(args: {
       }
       for (const edge of mapping.edges) {
         if (!edge.evidenceId || citations.length >= MAX_EVIDENCE) continue;
+        const weak = edge.basis === "same-file";
         const citation: ChatCitation = {
           id: `E${citations.length + 1}`,
           stableId: edge.evidenceId,
-          label: `PR #${handoff.number} may affect ${edge.source} -> ${edge.target}`,
+          label: weak
+            ? `PR #${handoff.number} has same-file proximity to ${edge.source} -> ${edge.target}; verify exact impact`
+            : `PR #${handoff.number} exactly overlaps ${edge.source} -> ${edge.target}`,
           subjectType: "edge",
           subjectId: edge.edgeId,
           repositoryId: handoff.repositoryId ?? undefined,
           scanId: handoff.scanId ?? undefined,
-          commitSha: handoff.head.sha,
+          commitSha: edge.provenance.scanCommitSha ?? null,
           filePath: mapping.filePath,
           lineStart: edge.lineStart,
           lineEnd: edge.lineEnd,
           snippet: redactSecrets(edge.snippet).slice(0, 600),
           detector: edge.detector,
-          confidenceReason: edge.reason,
-          confidence: edge.confidence,
+          confidenceReason: `${edge.reason} Evidence came from scan commit ${edge.provenance.scanCommitSha ?? "unknown"}, not PR head ${handoff.head.sha}.`,
+          confidence: weak ? "inferred" : edge.confidence,
         };
         const key = evidenceKey(citation);
         if (!seenEvidence.has(key)) {
           seenEvidence.add(key);
           citations.push(citation);
         }
+      }
+      if (citations.length >= MAX_EVIDENCE) break;
+    }
+  } else {
+    for (const node of nodes) {
+      for (const evidence of node.evidence ?? []) {
+        const citation = citationFromEvidence({
+          index: citations.length + 1,
+          subjectType: "node",
+          subjectId: node.id,
+          repositoryId: node.repositoryId,
+          scan: node.repositoryId ? latestScanByRepoId.get(node.repositoryId) : undefined,
+          label: node.label,
+          confidence: node.confidence,
+          evidence,
+        });
+        const key = evidenceKey(citation);
+        if (!seenEvidence.has(key)) {
+          seenEvidence.add(key);
+          citations.push(citation);
+        }
+        if (citations.length >= MAX_EVIDENCE) break;
+      }
+      if (citations.length >= MAX_EVIDENCE) break;
+    }
+    for (const edge of edges) {
+      for (const evidence of edge.evidence ?? []) {
+        const source = nodesById.get(edge.source)?.label ?? edge.source;
+        const target = nodesById.get(edge.target)?.label ?? edge.target;
+        const citation = citationFromEvidence({
+          index: citations.length + 1,
+          subjectType: "edge",
+          subjectId: edge.id,
+          repositoryId: edge.repositoryId,
+          scan: edge.repositoryId ? latestScanByRepoId.get(edge.repositoryId) : undefined,
+          label: `${source} -> ${target}`,
+          confidence: edge.confidence,
+          evidence,
+        });
+        const key = evidenceKey(citation);
+        if (!seenEvidence.has(key)) {
+          seenEvidence.add(key);
+          citations.push(citation);
+        }
+        if (citations.length >= MAX_EVIDENCE) break;
       }
       if (citations.length >= MAX_EVIDENCE) break;
     }

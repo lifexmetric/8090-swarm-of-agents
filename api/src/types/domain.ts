@@ -279,6 +279,8 @@ export interface PullRequestChangedFile {
   deletions: number;
   changes: number;
   patch?: string;
+  patchStatus?: "available" | "missing";
+  patchUnavailableReason?: string;
 }
 
 export interface PullRequestCommit {
@@ -315,6 +317,8 @@ export interface PullRequestHandoffMapping {
     lineEnd: number;
     snippet: string;
     detector: string;
+    basis: "exact-line" | "same-file";
+    provenance: PullRequestHandoffProvenance;
   }>;
   edges: Array<{
     edgeId: string;
@@ -328,8 +332,23 @@ export interface PullRequestHandoffMapping {
     lineEnd: number;
     snippet: string;
     detector: string;
+    basis: "exact-line" | "same-file";
+    provenance: PullRequestHandoffProvenance;
   }>;
   uncertainty: string[];
+}
+
+export interface PullRequestHandoffProvenance {
+  evidenceSource: "atlas-scan";
+  scanId?: string | null;
+  scanCommitSha?: string | null;
+  evidenceId?: string;
+  evidenceFilePath: string;
+  evidenceLineStart: number;
+  evidenceLineEnd: number;
+  prBaseSha: string;
+  prHeadSha: string;
+  mappingBasis: "exact-line" | "same-file";
 }
 
 export interface PullRequestHandoffBrief {
@@ -345,10 +364,18 @@ export interface PullRequestHandoffBrief {
 
 export interface PullRequestAgentPacket {
   objective: string;
+  owner: string;
   repo: string;
+  number: number;
   prUrl: string;
   base: PullRequestRef;
   head: PullRequestRef;
+  commits: PullRequestCommit[];
+  changedFiles: PullRequestChangedFile[];
+  taskState: string[];
+  risks: string[];
+  missingTests: string[];
+  mappings: PullRequestHandoffMapping[];
   constraints: string[];
   exactFilesAndHunks: PullRequestHunk[];
   suggestedNextActions: string[];

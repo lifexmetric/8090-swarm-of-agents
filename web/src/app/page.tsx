@@ -43,6 +43,7 @@ export default function LandingPage() {
   const [handoffPending, setHandoffPending] = React.useState(false);
   const [handoffError, setHandoffError] = React.useState<string | null>(null);
   const [handoffChatOpen, setHandoffChatOpen] = React.useState(false);
+  const [showFullHandoff, setShowFullHandoff] = React.useState(false);
 
   async function start(url?: string) {
     const target = (url ?? repo).trim();
@@ -67,6 +68,7 @@ export default function LandingPage() {
     setPrUrl(target);
     setHandoff(null);
     setHandoffChatOpen(false);
+    setShowFullHandoff(false);
     setHandoffError(null);
     setHandoffPending(true);
     try {
@@ -186,10 +188,10 @@ export default function LandingPage() {
           </div>
           <form
             onSubmit={(e) => { e.preventDefault(); void startHandoff(); }}
-            className="flex w-full max-w-2xl items-center gap-0 rounded-lg border border-[#2a2c36] bg-[#181a22] focus-within:border-[#34d399]/50"
+            className="flex w-full max-w-2xl flex-col items-stretch gap-0 rounded-lg border border-[#2a2c36] bg-[#181a22] focus-within:border-[#34d399]/50 sm:flex-row sm:items-center"
           >
             <label htmlFor="pr-url" className="sr-only">GitHub pull request URL</label>
-            <div className="flex flex-1 items-center gap-2.5 pl-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-4">
               <GitPullRequest className="h-4 w-4 shrink-0 text-[#5c5e6a]" />
               <input
                 id="pr-url"
@@ -204,7 +206,7 @@ export default function LandingPage() {
               type="submit"
               disabled={handoffPending}
               data-testid="build-pr-handoff"
-              className="flex shrink-0 cursor-pointer items-center gap-2 rounded-r-lg bg-[#34d399] px-4 py-3 text-sm font-semibold text-[#07110d] transition-colors duration-150 hover:bg-[#10b981] disabled:pointer-events-none disabled:opacity-50"
+              className="flex w-full shrink-0 cursor-pointer items-center justify-center gap-2 border-t border-[#2a2c36] bg-[#34d399] px-4 py-3 text-sm font-semibold text-[#07110d] transition-colors duration-150 hover:bg-[#10b981] disabled:pointer-events-none disabled:opacity-50 sm:w-auto sm:rounded-r-lg sm:border-t-0"
             >
               {handoffPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
               Build handoff
@@ -216,7 +218,7 @@ export default function LandingPage() {
 
           {handoff && (
             <section data-testid="pr-handoff-review" className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-lg border border-[#2a2c36] bg-[#11131a] p-4">
+              <div className="rounded-lg border border-[#2a2c36] bg-[#11131a] p-4 lg:col-span-2">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-mono text-[12px] text-[#5c5e6a]">{handoff.owner}/{handoff.repo}#{handoff.number}</p>
@@ -257,6 +259,14 @@ export default function LandingPage() {
                     <p>{handoff.changedFiles.length} file(s), {handoff.hunks.length} hunk(s), {handoff.commits.length} commit(s)</p>
                     <p>memory {handoff.memoryStatus?.operationId ?? handoff.memoryStatus?.error ?? "not written"}</p>
                   </div>
+                  <button
+                    type="button"
+                    data-testid="show-full-handoff"
+                    onClick={() => setShowFullHandoff((value) => !value)}
+                    className="mt-4 w-full cursor-pointer rounded-md border border-[#2a2c36] px-3 py-2 text-[13px] font-semibold text-[#e8e9ed] transition-colors duration-150 hover:border-[#3a3c48]"
+                  >
+                    {showFullHandoff ? "Hide full handoff" : "Show full handoff"}
+                  </button>
                 </div>
                 <div className="max-h-[360px] overflow-y-auto rounded-lg border border-[#2a2c36] bg-[#11131a] p-4">
                   <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Files, hunks, evidence</p>
@@ -277,8 +287,14 @@ export default function LandingPage() {
                       </div>
                     ))}
                   </div>
+                  {(handoff.mappings.length > 8 || handoff.mappings.some((mapping) => mapping.nodes.length > 3 || mapping.edges.length > 3)) && (
+                    <p className="mt-3 text-[12px] text-[#fbbf24]">
+                      Preview only. Use Show full handoff for all mappings, evidence, and provenance.
+                    </p>
+                  )}
                 </div>
               </div>
+              {showFullHandoff && <FullHandoffView handoff={handoff} />}
             </section>
           )}
         </div>
@@ -322,5 +338,114 @@ export default function LandingPage() {
         onSelectLink={() => {}}
       />
     </main>
+  );
+}
+
+function FullHandoffView({ handoff }: { handoff: PullRequestHandoffRecord }) {
+  return (
+    <div data-testid="full-handoff-view" className="rounded-lg border border-[#2a2c36] bg-[#11131a] p-4 lg:col-span-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Full handoff package</p>
+          <p className="mt-1 text-sm text-[#b7b9c3]">All changed files, hunks, mappings, evidence, provenance, unknowns, risks, and next actions.</p>
+        </div>
+        <a
+          href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(handoff.agentPacket, null, 2))}`}
+          download={`atlas-pr-${handoff.owner}-${handoff.repo}-${handoff.number}-agent-packet.json`}
+          data-testid="agent-packet-export"
+          className="rounded-md border border-[#2a2c36] px-3 py-2 text-[13px] font-semibold text-[#e8e9ed] transition-colors duration-150 hover:border-[#3a3c48]"
+        >
+          Export packet
+        </a>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section>
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Changed files</p>
+          <div className="space-y-2">
+            {handoff.changedFiles.map((file) => (
+              <div key={file.filename} data-testid="full-changed-file" className="rounded-md border border-[#2a2c36] p-3">
+                <p className="break-all font-mono text-[12px] text-[#e8e9ed]">{file.filename}</p>
+                <p className="mt-1 font-mono text-[11px] text-[#8b8d98]">{file.status} +{file.additions}/-{file.deletions} changes {file.changes}</p>
+                {(file.patchStatus === "missing" || file.patchUnavailableReason) && (
+                  <p className="mt-1 text-[12px] text-[#fbbf24]">{file.patchUnavailableReason ?? "No patch text was available for this file."}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Known unknowns</p>
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[#b7b9c3]">
+            {handoff.agentPacket.knownUnknowns.map((item) => <li key={item}>- {item}</li>)}
+          </ul>
+        </section>
+
+        <section>
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Risks</p>
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[#b7b9c3]">
+            {handoff.agentPacket.risks.map((item) => <li key={item}>- {item}</li>)}
+          </ul>
+        </section>
+
+        <section>
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Next actions</p>
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[#b7b9c3]">
+            {handoff.agentPacket.suggestedNextActions.map((item) => <li key={item}>- {item}</li>)}
+          </ul>
+        </section>
+      </div>
+
+      <section className="mt-5">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">All mappings and provenance</p>
+        <div className="space-y-3">
+          {handoff.mappings.map((mapping) => (
+            <div key={mapping.hunkId} data-testid="full-hunk-mapping" className="rounded-md border border-[#2a2c36] p-3">
+              <p className="break-all font-mono text-[12px] text-[#e8e9ed]">{mapping.filePath}</p>
+              <p className="mt-1 break-all font-mono text-[11px] text-[#5c5e6a]">{mapping.hunkId}</p>
+              {mapping.uncertainty.length > 0 && (
+                <ul className="mt-2 space-y-1 text-[12px] text-[#fbbf24]">
+                  {mapping.uncertainty.map((item) => <li key={item}>- {item}</li>)}
+                </ul>
+              )}
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div>
+                  <p className="mb-1 font-mono text-[11px] text-[#5c5e6a]">Nodes</p>
+                  {mapping.nodes.length === 0 ? <p className="text-[12px] text-[#8b8d98]">No node evidence mapped.</p> : mapping.nodes.map((node) => (
+                    <div key={`${mapping.hunkId}-${node.nodeId}`} className="mb-2 rounded border border-[#242631] p-2 text-[12px] text-[#b7b9c3]">
+                      <p className="font-semibold text-[#e8e9ed]">{node.label} · {node.kind} · {node.basis ?? "unknown"}</p>
+                      <p>{node.reason}</p>
+                      <p className="mt-1 font-mono text-[11px] text-[#8b8d98]">evidence {node.evidenceId ?? "none"} scan {(node.provenance as { scanCommitSha?: string } | undefined)?.scanCommitSha ?? "unknown"} lines {node.lineStart}-{node.lineEnd}</p>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p className="mb-1 font-mono text-[11px] text-[#5c5e6a]">Edges</p>
+                  {mapping.edges.length === 0 ? <p className="text-[12px] text-[#8b8d98]">No edge evidence mapped.</p> : mapping.edges.map((edge) => (
+                    <div key={`${mapping.hunkId}-${edge.edgeId}`} className="mb-2 rounded border border-[#242631] p-2 text-[12px] text-[#b7b9c3]">
+                      <p className="font-semibold text-[#e8e9ed]">{edge.source} {"->"} {edge.target} · {edge.kind} · {edge.basis ?? "unknown"}</p>
+                      <p>{edge.reason}</p>
+                      <p className="mt-1 font-mono text-[11px] text-[#8b8d98]">evidence {edge.evidenceId ?? "none"} scan {(edge.provenance as { scanCommitSha?: string } | undefined)?.scanCommitSha ?? "unknown"} lines {edge.lineStart}-{edge.lineEnd}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-5">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[#5c5e6a]">Exact hunks</p>
+        <div className="space-y-3">
+          {handoff.hunks.map((hunk) => (
+            <pre key={hunk.id} data-testid="full-hunk-patch" className="max-h-56 overflow-auto rounded-md border border-[#2a2c36] bg-[#08090d] p-3 text-[11px] leading-relaxed text-[#b7b9c3]">
+              {`${hunk.filePath} ${hunk.header}\n${hunk.patch}`}
+            </pre>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }

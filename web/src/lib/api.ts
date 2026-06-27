@@ -105,14 +105,14 @@ export interface PullRequestHandoffRecord {
   publicAccess: boolean;
   base: { owner: string; repo: string; ref: string; sha: string };
   head: { owner: string; repo: string; ref: string; sha: string };
-  changedFiles: Array<{ filename: string; status: string; additions: number; deletions: number; changes: number }>;
+  changedFiles: Array<{ filename: string; status: string; additions: number; deletions: number; changes: number; patchStatus?: "available" | "missing"; patchUnavailableReason?: string }>;
   commits: Array<{ sha: string; message: string; author?: string | null; date?: string | null }>;
   hunks: PullRequestHunk[];
   mappings: Array<{
     hunkId: string;
     filePath: string;
-    nodes: Array<{ nodeId: string; label: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string }>;
-    edges: Array<{ edgeId: string; source: string; target: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string }>;
+    nodes: Array<{ nodeId: string; label: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string; basis?: "exact-line" | "same-file"; provenance?: unknown }>;
+    edges: Array<{ edgeId: string; source: string; target: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string; basis?: "exact-line" | "same-file"; provenance?: unknown }>;
     uncertainty: string[];
   }>;
   humanBrief: {
@@ -127,10 +127,18 @@ export interface PullRequestHandoffRecord {
   };
   agentPacket: {
     objective: string;
+    owner: string;
     repo: string;
+    number: number;
     prUrl: string;
     base: { owner: string; repo: string; ref: string; sha: string };
     head: { owner: string; repo: string; ref: string; sha: string };
+    commits: Array<{ sha: string; message: string; author?: string | null; date?: string | null }>;
+    changedFiles: PullRequestHandoffRecord["changedFiles"];
+    taskState: string[];
+    risks: string[];
+    missingTests: string[];
+    mappings: PullRequestHandoffRecord["mappings"];
     constraints: string[];
     exactFilesAndHunks: PullRequestHunk[];
     suggestedNextActions: string[];

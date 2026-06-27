@@ -63,11 +63,15 @@ export class HandoffService {
       pr,
       graph: scan?.graph ?? null,
       context: scan?.context?.handoff ?? null,
+      scan,
     });
     const handoffId = stableId("handoff", workspaceId, pr.owner, pr.repo, String(pr.number), pr.head.sha);
+    const existing = this.repository.getPullRequestHandoff(handoffId);
     const memoryFacts = buildPullRequestMemoryFacts({ handoffId, pr, repository, mappings });
     const assistantId = await this.ensureAssistantIfPossible(workspaceId);
-    const memoryStatus = assistantId
+    const memoryStatus = existing?.memoryStatus?.operationId
+      ? existing.memoryStatus
+      : assistantId
       ? await this.backboard.storeHandoffMemory({
           assistantId,
           workspaceId,
@@ -97,7 +101,7 @@ export class HandoffService {
     record.agentPacket.backboardMemoryRefs = memoryStatus.operationId ? [memoryStatus.operationId] : [];
     record.backboardMemoryOperationId = memoryStatus.operationId ?? null;
 
-    return this.repository.createPullRequestHandoff(record);
+    return this.repository.upsertPullRequestHandoff(record);
   }
 
   getHandoff(id: string): PullRequestHandoffRecord | null {

@@ -601,7 +601,7 @@ export class AtlasRepository {
       );
   }
 
-  createPullRequestHandoff(input: PullRequestHandoffRecord): PullRequestHandoffRecord {
+  upsertPullRequestHandoff(input: PullRequestHandoffRecord): PullRequestHandoffRecord {
     this.db
       .prepare(`
         INSERT INTO pull_request_handoffs
@@ -611,6 +611,32 @@ export class AtlasRepository {
            backboard_memory_operation_id, created_at, updated_at)
         VALUES
           (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          workspace_id = excluded.workspace_id,
+          repository_id = excluded.repository_id,
+          scan_id = excluded.scan_id,
+          pr_url = excluded.pr_url,
+          owner = excluded.owner,
+          repo = excluded.repo,
+          number = excluded.number,
+          title = excluded.title,
+          state = excluded.state,
+          author = excluded.author,
+          public_access = excluded.public_access,
+          base_json = excluded.base_json,
+          head_json = excluded.head_json,
+          changed_files_json = excluded.changed_files_json,
+          commits_json = excluded.commits_json,
+          hunks_json = excluded.hunks_json,
+          mappings_json = excluded.mappings_json,
+          human_brief_json = excluded.human_brief_json,
+          agent_packet_json = excluded.agent_packet_json,
+          memory_facts_json = excluded.memory_facts_json,
+          memory_status_json = excluded.memory_status_json,
+          backboard_assistant_id = excluded.backboard_assistant_id,
+          backboard_thread_id = excluded.backboard_thread_id,
+          backboard_memory_operation_id = excluded.backboard_memory_operation_id,
+          updated_at = excluded.updated_at
       `)
       .run(
         input.id,
@@ -642,6 +668,10 @@ export class AtlasRepository {
         input.updatedAt,
       );
     return this.getPullRequestHandoff(input.id)!;
+  }
+
+  createPullRequestHandoff(input: PullRequestHandoffRecord): PullRequestHandoffRecord {
+    return this.upsertPullRequestHandoff(input);
   }
 
   getPullRequestHandoff(id: string): PullRequestHandoffRecord | null {
@@ -1024,10 +1054,18 @@ function pullRequestHandoffFromRow(row: PullRequestHandoffRow): PullRequestHando
     }),
     agentPacket: parseJson(row.agent_packet_json, {
       objective: "",
+      owner: row.owner,
       repo: `${row.owner}/${row.repo}`,
+      number: row.number,
       prUrl: row.pr_url,
       base: { owner: row.owner, repo: row.repo, ref: "", sha: "" },
       head: { owner: row.owner, repo: row.repo, ref: "", sha: "" },
+      commits: [],
+      changedFiles: [],
+      taskState: [],
+      risks: [],
+      missingTests: [],
+      mappings: [],
       constraints: [],
       exactFilesAndHunks: [],
       suggestedNextActions: [],

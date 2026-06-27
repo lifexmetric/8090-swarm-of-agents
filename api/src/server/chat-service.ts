@@ -33,6 +33,7 @@ export interface ChatBackboardLike {
 
 export class ChatService {
   private readonly backboard: ChatBackboardLike;
+  private readonly localAssistantId = "backboard_unconfigured";
 
   constructor(
     private readonly config: AtlasConfig,
@@ -108,6 +109,29 @@ export class ChatService {
       scanId: input.scanId ?? null,
       handoffId: input.handoffId ?? null,
     });
+
+    if (session.assistantId === this.localAssistantId) {
+      const assistantMessage = this.repository.addChatMessage({
+        id: newId("msg"),
+        sessionId,
+        role: "assistant",
+        content: [
+          "Handoff assistant is running in local fallback mode because Backboard is not configured for this Atlas instance.",
+          "",
+          "Direct answer: I can show the stored PR handoff context, evidence citations, uncertainty, and suggested next actions, but live AI follow-up requires BACKBOARD_API_KEY or BACKBOARD_ASSISTANT_ID.",
+          "",
+          context.generatedMarkdown,
+        ].join("\n"),
+        context,
+        citations: context.evidence,
+        memoryError: "Backboard is not configured; no external assistant call or memory write was attempted.",
+      });
+      return {
+        session,
+        userMessage,
+        assistantMessage,
+      };
+    }
 
     const response = await this.backboard.chat({
       assistantId: session.assistantId,
@@ -200,6 +224,10 @@ export class ChatService {
     if (this.config.backboardAssistantId) {
       this.repository.setWorkspaceAssistantId(workspaceId, this.config.backboardAssistantId);
       return this.config.backboardAssistantId;
+    }
+    if (!this.config.backboardApiKey) {
+      this.repository.setWorkspaceAssistantId(workspaceId, this.localAssistantId);
+      return this.localAssistantId;
     }
     const assistantId = await this.backboard.createAssistant(workspaceId);
     this.repository.setWorkspaceAssistantId(workspaceId, assistantId);

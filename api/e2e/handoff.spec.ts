@@ -94,7 +94,7 @@ let firstAssistantMessage: ChatMessage;
 let prHandoff: PullRequestHandoff;
 
 test.describe("public PR intake without Backboard", () => {
-  test("builds a UI handoff package from a real public PR URL without a GitHub token", async ({ page }) => {
+  test("builds a full UI handoff package and fallback chat from a real public PR URL without a GitHub token", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.getByTestId("pr-handoff-input").fill(publicPrUrl);
@@ -103,6 +103,31 @@ test.describe("public PR intake without Backboard", () => {
     await expect(page.getByTestId("pr-handoff-review")).toContainText(/public\/no token/i);
     await expect(page.getByTestId("pr-handoff-review")).toContainText(/without a GitHub token/i);
     await expect(page.getByTestId("pr-hunk-mapping").first()).toBeVisible();
+    await page.getByTestId("show-full-handoff").click();
+    await expect(page.getByTestId("full-handoff-view")).toBeVisible();
+    await expect(page.getByTestId("full-changed-file").first()).toBeVisible();
+    await expect(page.getByTestId("full-hunk-mapping").first()).toBeVisible();
+    await expect(page.getByTestId("agent-packet-export")).toBeVisible();
+
+    await page.getByTestId("build-pr-handoff").click();
+    await expect(page.getByTestId("pr-handoff-review")).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByText(/UNIQUE constraint failed/i)).toHaveCount(0);
+
+    await page.getByTestId("handoff-chat-open").click();
+    await page.getByTestId("quick-prompt").first().click();
+    await expect(page.getByTestId("assistant-message").last()).toContainText(/local fallback mode|Backboard is not configured/i, { timeout: 60_000 });
+  });
+
+  test("submits the public PR handoff form on mobile", async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("pr-handoff-input").fill(publicPrUrl);
+    await expect(page.getByTestId("build-pr-handoff")).toBeVisible();
+    await page.getByTestId("build-pr-handoff").click();
+    await expect(page.getByTestId("pr-handoff-review")).toBeVisible({ timeout: 120_000 });
+    await page.getByTestId("show-full-handoff").click();
+    await expect(page.getByTestId("full-handoff-view")).toBeVisible();
   });
 });
 
