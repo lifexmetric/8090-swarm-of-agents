@@ -10,6 +10,7 @@ import {
   nodeById,
   nodeContextMarkdown,
   type GraphData,
+  type GraphLink,
   type GraphNode,
 } from "@/lib/data";
 import { NODE_ICON } from "./icons";
@@ -37,6 +38,24 @@ function ConnRow({
     </button>
   );
 }
+
+/** Compact label/value cell used in the "At a glance" facts grid. */
+function Fact({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="bg-surface px-2.5 py-2">
+      <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-faint">{label}</p>
+      <p
+        className="mt-0.5 truncate font-mono text-[12px] text-ink"
+        style={accent ? { color: accent } : undefined}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+type Conn = { link: GraphLink; peer: GraphNode | undefined; direction: "out" | "in" };
 
 export function NodePanel({
   node,
@@ -72,8 +91,27 @@ export function NodePanel({
     [graphData],
   );
 
+  // Developer-focused derived insight (works for demo + real scan data alike).
+  const connections = React.useMemo<Conn[]>(
+    () => [
+      ...deps.map((link) => ({ link, peer: nodeById(link.target, graphData), direction: "out" as const })),
+      ...dependents.map((link) => ({ link, peer: nodeById(link.source, graphData), direction: "in" as const })),
+    ],
+    [deps, dependents, graphData],
+  );
+  const maxCriticality = connections.reduce((m, c) => Math.max(m, c.link.criticality), 0);
+  const onCriticalPath = maxCriticality >= 4;
+  const contracts = connections.filter(
+    (c) =>
+      c.peer &&
+      c.link.contract &&
+      c.link.contract.trim() &&
+      c.link.contract !== "No contract inferred yet.",
+  );
+  const headsUp = connections.filter((c) => c.link.beforeYouChange);
+
   async function copy() {
-    await navigator.clipboard.writeText(nodeContextMarkdown(node));
+    await navigator.clipboard.writeText(nodeContextMarkdown(node, graphData));
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
@@ -186,13 +224,44 @@ export function NodePanel({
               <SectionLabel>What it is</SectionLabel>
               <p className="text-[13px] leading-relaxed text-muted">{node.whatItIs}</p>
             </div>
+
+            {/* At a glance — quick facts for impact analysis */}
+            <div>
+              <SectionLabel>At a glance</SectionLabel>
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
+                <Fact label="Type" value={meta.label} accent={meta.color} />
+                <Fact label="Domain" value={node.domain} />
+                <Fact label="Fan-out" value={`${deps.length} ${deps.length === 1 ? "dependency" : "dependencies"}`} />
+                <Fact
+                  label="Blast radius"
+                  value={`${dependents.length} ${dependents.length === 1 ? "dependent" : "dependents"}`}
+                />
+                <Fact label="Confidence" value={node.confidence} />
+                <Fact label="Max criticality" value={maxCriticality ? `${maxCriticality}/5` : "—"} />
+              </div>
+              {node.path && (
+                <p className="mt-1.5 font-mono text-[11px] text-faint">Location: {node.path}</p>
+              )}
+              {onCriticalPath && (
+                <p
+                  className="mt-1.5 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug text-muted"
+                  style={{
+                    borderColor: colorAlpha("var(--color-warn)", 27),
+                    backgroundColor: colorAlpha("var(--color-warn)", 6),
+                  }}
+                >
+                  On a critical path — a connection here is criticality {maxCriticality}/5. Changes can ripple system-wide.
+                </p>
+              )}
+            </div>
+
             <div>
               <SectionLabel>Why it exists</SectionLabel>
               <p className="text-[13px] leading-relaxed text-muted">{node.whyItExists}</p>
             </div>
             {node.owns.length > 0 && (
               <div>
-                <SectionLabel>Owns</SectionLabel>
+                <SectionLabel>Owns / responsibilities</SectionLabel>
                 <div className="flex flex-wrap gap-1.5">
                   {node.owns.map((o) => (
                     <span
@@ -203,6 +272,64 @@ export function NodePanel({
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Interfaces & contracts — the actual signatures a dev needs */}
+            {contracts.length > 0 && (
+              <div>
+                <SectionLabel>Interfaces &amp; contracts · {contracts.length}</SectionLabel>
+                <div className="space-y-2">
+                  {contracts.map((c) => {
+                    const ek = EDGE_KIND_META[c.link.kind];
+                    return (
+                      <div key={c.link.id} className="overflow-hidden rounded-md border border-line">
+                        <button
+                          onClick={() => onSelectLink(c.link.id)}
+                          className="flex w-full cursor-pointer items-center gap-1.5 border-b border-line bg-bg px-2.5 py-1.5 text-left transition-colors duration-150 hover:bg-surface"
+                        >
+                          <span className="shrink-0 font-mono text-[12px]" style={{ color: ek.color }}>
+                            {c.direction === "out" ? "→" : "←"}
+                          </span>
+                          <span className="truncate font-mono text-[11.5px] text-muted">
+                            {c.direction === "out" ? "calls " : "called by "}
+                            <span className="text-ink">{c.peer?.label}</span>
+                          </span>
+                          <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">
+                            {ek.label} · {c.link.criticality}/5
+                          </span>
+                        </button>
+                        <pre className="scroll-thin overflow-x-auto bg-code-bg px-3 py-2 font-mono text-[11px] leading-relaxed text-code">
+                          {c.link.contract}
+                        </pre>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Heads up — institutional knowledge before editing */}
+            {headsUp.length > 0 && (
+              <div>
+                <SectionLabel>Heads up before you change</SectionLabel>
+                <ul className="space-y-2">
+                  {headsUp.map((c) => (
+                    <li
+                      key={c.link.id}
+                      className="rounded-md border px-3 py-2 text-[12.5px] leading-relaxed text-muted"
+                      style={{
+                        borderColor: colorAlpha("var(--color-warn)", 27),
+                        backgroundColor: colorAlpha("var(--color-warn)", 6),
+                      }}
+                    >
+                      <span className="font-mono text-[10.5px] text-faint">
+                        {c.direction === "out" ? `${node.label} → ${c.peer?.label}` : `${c.peer?.label} → ${node.label}`}
+                      </span>
+                      <p className="mt-1">{c.link.beforeYouChange}</p>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
@@ -264,6 +391,33 @@ export function NodePanel({
                     <RiskRow key={r} text={r} />
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Evidence — where this node was detected, so claims are verifiable */}
+            {node.evidence && node.evidence.length > 0 && (
+              <div>
+                <SectionLabel>Evidence · {node.evidence.length}</SectionLabel>
+                <div className="space-y-1">
+                  {node.evidence.map((e, i) => {
+                    const range =
+                      e.lineEnd && e.lineEnd !== e.lineStart
+                        ? `L${e.lineStart}-L${e.lineEnd}`
+                        : `L${e.lineStart}`;
+                    return (
+                      <div
+                        key={e.id ?? `${e.filePath}-${e.lineStart}-${i}`}
+                        className="flex items-center gap-2 border border-line bg-bg px-2.5 py-1.5"
+                        title={e.confidenceReason}
+                      >
+                        <span className="truncate font-mono text-[11.5px] text-muted">
+                          {e.filePath}:{range}
+                        </span>
+                        <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">{e.detector}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

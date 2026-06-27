@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X, Copy, Check, ArrowRight, AlertTriangle } from "lucide-react";
+import { X, Copy, Check, ArrowRight, AlertTriangle, FileSearch } from "lucide-react";
 import {
   EDGE_KIND_META,
   linkContextMarkdown,
@@ -12,6 +12,20 @@ import {
 } from "@/lib/data";
 import { EDGE_ICON, NODE_ICON } from "./icons";
 import { CodeBlock, ConfidenceBadge, RiskRow, SectionLabel, Tag, colorAlpha } from "./ui";
+
+const CONFIDENCE_NOTE: Record<string, string> = {
+  confirmed: "Explicit in the code — high trust.",
+  inferred: "Inferred from code patterns — likely correct, spot-check before relying on it.",
+  uncertain: "Partially inferred — verify directly against the code before relying on it.",
+};
+
+function critNote(c: number): string {
+  if (c >= 5) return "On the critical path — failures here are user-visible.";
+  if (c >= 4) return "High impact — changes ripple to other services.";
+  if (c >= 3) return "Moderate impact — degrades a feature, not the whole system.";
+  if (c >= 2) return "Limited impact — mostly contained.";
+  return "Peripheral — low blast radius.";
+}
 
 function CritBar({ value }: { value: number }) {
   const color = value >= 4 ? "var(--color-err)" : value >= 3 ? "var(--color-warn)" : "var(--color-node-infra)";
@@ -60,7 +74,7 @@ export function LinkPanel({
   const rows = relationshipRows(link.contract);
 
   async function copy() {
-    await navigator.clipboard.writeText(linkContextMarkdown(link));
+    await navigator.clipboard.writeText(linkContextMarkdown(link, graphData));
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
@@ -136,6 +150,29 @@ export function LinkPanel({
           <SectionLabel>Summary</SectionLabel>
           <p className="text-[13px] leading-relaxed text-muted">{link.summary}</p>
         </div>
+
+        {/* What connects here — orient the reader on direction + types */}
+        <div>
+          <SectionLabel>What connects here</SectionLabel>
+          <div className="space-y-1 font-mono text-[12px] text-muted">
+            <p>
+              <span className="text-faint">Caller:</span>{" "}
+              <span className="text-ink">{source?.label ?? link.source}</span>{" "}
+              <span className="text-faint">
+                ({source ? NODE_KIND_META[source.kind].label : "unknown"})
+              </span>
+            </p>
+            <p>
+              <span className="text-faint">Callee:</span>{" "}
+              <span className="text-ink">{target?.label ?? link.target}</span>{" "}
+              <span className="text-faint">
+                ({target ? NODE_KIND_META[target.kind].label : "unknown"})
+              </span>
+            </p>
+            <p className="text-faint">{critNote(link.criticality)}</p>
+          </div>
+        </div>
+
         <div>
           <SectionLabel>Code</SectionLabel>
           <CodeBlock code={link.code} caption={link.codePath} />
@@ -183,6 +220,54 @@ export function LinkPanel({
               Before you change this
             </div>
             <p className="text-[13px] leading-relaxed text-muted">{link.beforeYouChange}</p>
+          </div>
+        )}
+
+        {/* Confidence reasoning — why this claim can or can't be trusted */}
+        <div>
+          <SectionLabel>Confidence</SectionLabel>
+          <p className="text-[13px] leading-relaxed text-muted">
+            <span className="font-mono text-ink">{link.confidence}</span> —{" "}
+            {CONFIDENCE_NOTE[link.confidence] ?? ""}
+          </p>
+        </div>
+
+        {/* Evidence — file:line + snippet so a dev can verify without prior context */}
+        {link.evidence && link.evidence.length > 0 && (
+          <div>
+            <SectionLabel>Evidence · {link.evidence.length}</SectionLabel>
+            <div className="space-y-2.5">
+              {link.evidence.map((e, i) => {
+                const range =
+                  e.lineEnd && e.lineEnd !== e.lineStart
+                    ? `L${e.lineStart}-L${e.lineEnd}`
+                    : `L${e.lineStart}`;
+                return (
+                  <div
+                    key={e.id ?? `${e.filePath}-${e.lineStart}-${i}`}
+                    className="overflow-hidden rounded-md border border-line"
+                  >
+                    <div className="flex items-center gap-1.5 border-b border-line bg-bg px-2.5 py-1.5">
+                      <FileSearch className="h-3 w-3 shrink-0 text-faint" />
+                      <span className="truncate font-mono text-[11px] text-muted" title={`${e.filePath}:${range}`}>
+                        {e.filePath}:{range}
+                      </span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">{e.detector}</span>
+                    </div>
+                    {e.confidenceReason && (
+                      <p className="border-b border-line px-2.5 py-1.5 text-[11.5px] leading-snug text-faint">
+                        {e.confidenceReason}
+                      </p>
+                    )}
+                    {e.snippet && e.snippet.trim() && (
+                      <pre className="scroll-thin overflow-x-auto bg-code-bg px-3 py-2 font-mono text-[11px] leading-relaxed text-code">
+                        {e.snippet.trimEnd()}
+                      </pre>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

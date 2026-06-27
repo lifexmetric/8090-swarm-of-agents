@@ -1,4 +1,4 @@
-import type { Confidence, EdgeKind, GraphData, GraphLink, GraphNode, NodeKind } from "./data";
+import type { Confidence, EdgeKind, Evidence, GraphData, GraphLink, GraphNode, NodeKind } from "./data";
 
 export const ATLAS_API_URL = (process.env.NEXT_PUBLIC_ATLAS_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 const API_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
@@ -177,6 +177,22 @@ function text(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
 
+function evidence(value: unknown): Evidence[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item): Evidence => ({
+      id: typeof item.id === "string" ? item.id : undefined,
+      filePath: text(item.filePath, "unknown"),
+      lineStart: Number.isFinite(item.lineStart) ? Number(item.lineStart) : 1,
+      lineEnd: Number.isFinite(item.lineEnd) ? Number(item.lineEnd) : Number(item.lineStart) || 1,
+      snippet: typeof item.snippet === "string" ? item.snippet : "",
+      detector: text(item.detector, "scanner"),
+      confidenceReason: typeof item.confidenceReason === "string" ? item.confidenceReason : "",
+    }));
+  return items.length > 0 ? items : undefined;
+}
+
 export function normalizeGraph(graph: GraphData): GraphData {
   return {
     nodes: graph.nodes.map((node): GraphNode => ({
@@ -190,6 +206,7 @@ export function normalizeGraph(graph: GraphData): GraphData {
       owns: Array.isArray(node.owns) ? node.owns : [],
       confidence: confidence(node.confidence),
       risks: Array.isArray(node.risks) ? node.risks : [],
+      evidence: evidence((node as { evidence?: unknown }).evidence),
     })),
     links: graph.links.map((link): GraphLink => ({
       ...link,
@@ -205,7 +222,7 @@ export function normalizeGraph(graph: GraphData): GraphData {
       failure: text(link.failure, "No failure mode inferred yet."),
       risks: Array.isArray(link.risks) ? link.risks : [],
       confidence: confidence(link.confidence),
-      evidence: Array.isArray(link.evidence) ? link.evidence : [],
+      evidence: evidence((link as { evidence?: unknown }).evidence),
     })),
   };
 }

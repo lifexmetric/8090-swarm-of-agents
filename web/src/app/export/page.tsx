@@ -7,37 +7,31 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ArrowLeft, FileText, Boxes, Share2, Copy, Check, Download, Package,
-  ShieldAlert, ChevronDown, ChevronRight, Code, AlertTriangle,
+  Eye, FileCode, Search,
 } from "lucide-react";
 import {
   GRAPH,
   SYSTEM_BRIEF,
-  EDGE_KIND_META,
-  NODE_KIND_META,
-  CONFIDENCE_META,
   linkContextMarkdown,
   linkEndpoints,
   nodeContextMarkdown,
   riskSurfaceMarkdown,
-  dependenciesOf,
-  dependentsOf,
-  nodeById,
-  type GraphNode,
-  type GraphLink,
+  type GraphData,
 } from "@/lib/data";
-import { SubGraph } from "@/components/SubGraph";
-import { Logo, CodeBlock, cn, colorAlpha } from "@/components/ui";
+import { Logo, cn } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getScanExport } from "@/lib/api";
+import { LinkDocView, NodeDocView, SystemBriefView } from "@/components/DocViews";
+import { getScanExport, getScanGraph } from "@/lib/api";
 
 // ── Context file model ───────────────────────────────────────────────────────
 
 interface ContextFile {
   id: string;
   name: string;
-  group: "brief" | "risk" | "node" | "link" | "metadata";
+  group: "brief" | "risk" | "node" | "link";
   content: string;
   nodeId?: string;
+  linkId?: string;
 }
 
 const DEMO_FILES: ContextFile[] = [
@@ -67,11 +61,12 @@ const DEMO_FILES: ContextFile[] = [
       name: `link-context/${source?.id}__${target?.id}.md`,
       group: "link" as const,
       content: linkContextMarkdown(l),
+      linkId: l.id,
     };
   }),
 ];
 
-// ── Markdown renderer ────────────────────────────────────────────────────────
+// ── Markdown renderer (raw fallback) ──────────────────────────────────────────
 
 const mdComponents = {
   h1: (p: React.HTMLAttributes<HTMLHeadingElement>) => (
@@ -104,357 +99,44 @@ const mdComponents = {
       {...p}
     />
   ),
+  table: (p: React.HTMLAttributes<HTMLTableElement>) => (
+    <table className="mb-3 w-full border-collapse text-[12.5px]" {...p} />
+  ),
+  th: (p: React.HTMLAttributes<HTMLTableCellElement>) => (
+    <th className="border border-line bg-surface px-2 py-1 text-left font-mono text-[11px] text-faint" {...p} />
+  ),
+  td: (p: React.HTMLAttributes<HTMLTableCellElement>) => (
+    <td className="border border-line px-2 py-1 text-muted" {...p} />
+  ),
   hr: () => <hr className="my-4 border-line" />,
 };
 
-// ── Dependency deep-dive card ────────────────────────────────────────────────
-
-function CriticalityBar({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className="h-2 w-2.5 rounded-sm"
-          style={{
-            backgroundColor:
-              i <= value
-                ? value >= 5
-                  ? "var(--color-err)"
-                  : value >= 4
-                  ? "var(--color-warn)"
-                  : "var(--color-node-infra)"
-                : "var(--color-surface-2)",
-          }}
-        />
-      ))}
-      <span className="ml-1 font-mono text-[10px] text-faint">{value}/5</span>
-    </div>
-  );
-}
-
 function groupForPath(path: string): ContextFile["group"] {
-  if (path === "system-brief.md") return "brief";
   if (path.includes("risk")) return "risk";
   if (path.startsWith("node-context/")) return "node";
   if (path.startsWith("link-context/")) return "link";
-  return "metadata";
+  return "brief";
 }
 
-function DepCard({
-  link,
-  direction,
-  onJumpToNode,
-}: {
-  link: GraphLink;
-  direction: "out" | "in";
-  onJumpToNode: (id: string) => void;
-}) {
-  const isHigh = link.criticality >= 4;
-  const [open, setOpen] = React.useState(isHigh);
-  const peer =
-    direction === "out" ? nodeById(link.target) : nodeById(link.source);
-  const meta = EDGE_KIND_META[link.kind];
-  const peerMeta = peer ? NODE_KIND_META[peer.kind] : null;
-
-  return (
-    <div
-      className={cn(
-        "border transition-colors duration-150",
-        isHigh ? "border-warn/20 bg-warn/[0.03]" : "border-line bg-bg",
-      )}
-    >
-      {/* Card header */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left"
-      >
-        <span
-          className="shrink-0 font-mono text-[12px]"
-          style={{ color: meta.color }}
-        >
-          {direction === "out" ? "→" : "←"}
-        </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (peer) onJumpToNode(peer.id);
-          }}
-          className="min-w-0 flex-1 cursor-pointer text-left hover:underline"
-        >
-          <span className="font-mono text-[12.5px] font-semibold text-ink">
-            {peer?.label ?? (direction === "out" ? link.target : link.source)}
-          </span>
-          {peerMeta && (
-            <span
-              className="ml-2 font-mono text-[10px]"
-              style={{ color: peerMeta.color }}
-            >
-              {peerMeta.group}
-            </span>
-          )}
-        </button>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className="rounded border px-1.5 py-0.5 font-mono text-[10px]"
-            style={{ color: meta.color, borderColor: colorAlpha(meta.color, 27) }}
-          >
-            {meta.label}
-          </span>
-          <CriticalityBar value={link.criticality} />
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-faint" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-faint" />
-          )}
-        </div>
-      </button>
-
-      {/* Card body */}
-      {open && (
-        <div className="space-y-3 border-t border-line px-3 pt-3 pb-3">
-          {/* Summary */}
-          <p className="text-[12.5px] leading-relaxed text-muted">
-            {link.summary}
-          </p>
-
-          {/* Contract */}
-          <div>
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
-              Contract
-            </p>
-            <pre className="scroll-thin overflow-x-auto border border-line bg-code-bg p-2.5 font-mono text-[11.5px] leading-relaxed text-code">
-              {link.contract}
-            </pre>
-          </div>
-
-          {/* Failure */}
-          <div className="flex items-start gap-2 rounded border border-err/20 bg-err/5 px-2.5 py-2">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-err" />
-            <div>
-              <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-err/60">
-                Failure
-              </p>
-              <p className="text-[12px] leading-relaxed text-err/80">
-                {link.failure}
-              </p>
-            </div>
-          </div>
-
-          {/* Before you change */}
-          {link.beforeYouChange && (
-            <div className="rounded border border-warn/30 bg-warn/5 px-2.5 py-2">
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.1em] text-warn/70">
-                Before you change this
-              </p>
-              <p className="text-[12px] leading-relaxed text-warn/80">
-                {link.beforeYouChange}
-              </p>
-            </div>
-          )}
-
-          {/* Code snippet */}
-          {link.code && (
-            <div>
-              <div className="mb-1 flex items-center gap-1.5">
-                <Code className="h-3 w-3 text-faint" />
-                <span className="font-mono text-[10px] text-faint">
-                  {link.codePath}
-                </span>
-              </div>
-              <CodeBlock code={link.code} />
-            </div>
-          )}
-
-          {/* Risks */}
-          {link.risks.length > 0 && (
-            <ul className="space-y-1">
-              {link.risks.map((r) => (
-                <li key={r} className="flex items-start gap-2 text-[12px] text-muted">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
-                  {r}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Confidence */}
-          <div className="flex items-center gap-2">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: CONFIDENCE_META[link.confidence].color }}
-            />
-            <span className="font-mono text-[10px] text-faint">
-              {CONFIDENCE_META[link.confidence].label}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Node detail view ─────────────────────────────────────────────────────────
-
-function NodeDocView({
-  node,
-  onJumpToNode,
-}: {
-  node: GraphNode;
-  onJumpToNode: (id: string) => void;
-}) {
-  const meta = NODE_KIND_META[node.kind];
-  const deps = dependenciesOf(node.id);
-  const dependents = dependentsOf(node.id);
-
-  return (
-    <div>
-      {/* Header */}
-      <div className="mb-6 border-b border-line pb-4">
-        <div className="flex items-center gap-3">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center border"
-            style={{
-              borderColor: colorAlpha(meta.color, 27),
-              backgroundColor: colorAlpha(meta.color, 6),
-            }}
-          >
-            <span className="font-mono text-[11px] font-bold" style={{ color: meta.color }}>
-              {node.label.slice(0, 2).toUpperCase()}
-            </span>
-          </span>
-          <div>
-            <h1 className="font-mono text-[16px] font-semibold text-ink">
-              {node.label}
-            </h1>
-            <div className="mt-1 flex items-center gap-2">
-              <span
-                className="rounded border px-1.5 py-0.5 font-mono text-[10px]"
-                style={{ color: meta.color, borderColor: colorAlpha(meta.color, 27) }}
-              >
-                {meta.group}
-              </span>
-              <span className="font-mono text-[11px] text-faint">
-                {node.domain}
-              </span>
-              <span
-                className="flex items-center gap-1 font-mono text-[10px]"
-                style={{ color: CONFIDENCE_META[node.confidence].color }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: CONFIDENCE_META[node.confidence].color }}
-                />
-                {CONFIDENCE_META[node.confidence].label}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sub-graph */}
-      <div className="mb-6">
-        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-          Connections — click any node to jump to it
-        </p>
-        <div className="rounded border border-line bg-bg py-2">
-          <SubGraph node={node} graphData={GRAPH} onSelectNode={onJumpToNode} />
-        </div>
-      </div>
-
-      {/* What it is / Why it exists */}
-      <div className="mb-4">
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-          What it is
-        </p>
-        <p className="text-[13px] leading-relaxed text-muted">{node.whatItIs}</p>
-      </div>
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-          Why it exists
-        </p>
-        <p className="text-[13px] leading-relaxed text-muted">{node.whyItExists}</p>
-      </div>
-
-      {/* Owns */}
-      {node.owns.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-            Owns
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {node.owns.map((o) => (
-              <span
-                key={o}
-                className="border border-line bg-bg px-2 py-0.5 font-mono text-[11px] text-muted"
-              >
-                {o}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dependencies — deep-dive cards */}
-      {deps.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-            Depends on · {deps.length} outbound
-          </p>
-          <div className="space-y-2">
-            {deps
-              .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard
-                  key={l.id}
-                  link={l}
-                  direction="out"
-                  onJumpToNode={onJumpToNode}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dependents */}
-      {dependents.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-            Depended on by · {dependents.length} inbound
-          </p>
-          <div className="space-y-2">
-            {dependents
-              .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard
-                  key={l.id}
-                  link={l}
-                  direction="in"
-                  onJumpToNode={onJumpToNode}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Risk flags */}
-      {node.risks.length > 0 && (
-        <div className="mb-4">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-            Risk flags
-          </p>
-          <ul className="space-y-1.5">
-            {node.risks.map((r) => (
-              <li key={r} className="flex items-start gap-2 text-[13px] text-muted">
-                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
+/** Human-friendly document name a developer can actually scan for. */
+function friendlyName(file: ContextFile, graph: GraphData): string {
+  if (file.group === "node" && file.nodeId) {
+    const n = graph.nodes.find((x) => x.id === file.nodeId);
+    if (n) return n.label;
+  }
+  if (file.group === "link" && file.linkId) {
+    const l = graph.links.find((x) => x.id === file.linkId);
+    if (l) {
+      const s = graph.nodes.find((x) => x.id === l.source);
+      const t = graph.nodes.find((x) => x.id === l.target);
+      return `${s?.label ?? l.source} → ${t?.label ?? l.target}`;
+    }
+  }
+  if (file.name.includes("system-brief")) return "System brief";
+  if (file.name.includes("handoff")) return "Handoff map";
+  if (file.name.includes("backboard")) return "Backboard record";
+  if (file.name.includes("risk")) return "Risk surface";
+  return (file.name.split("/").pop() ?? file.name).replace(/\.(md|json)$/, "");
 }
 
 // ── Sidebar components ───────────────────────────────────────────────────────
@@ -475,21 +157,21 @@ function FileGroup({
 }
 
 function FileItem({
-  file, active, onClick,
+  file, label, active, onClick,
 }: {
-  file: ContextFile; active: boolean; onClick: () => void;
+  file: ContextFile; label: string; active: boolean; onClick: () => void;
 }) {
-  const short = file.name.split("/").pop();
   return (
     <button
       onClick={onClick}
+      title={file.name}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left font-mono text-[12px] transition-colors duration-150",
         active ? "bg-accent text-white" : "text-muted hover:bg-surface hover:text-ink",
       )}
     >
       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-bg" : "bg-line-2")} />
-      <span className="truncate">{short}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
@@ -501,28 +183,47 @@ function ExportPageContent() {
   const scanId = searchParams.get("scanId");
   const repoLabel = searchParams.get("repo") ?? "acme/payments-platform";
   const [files, setFiles] = React.useState<ContextFile[]>(DEMO_FILES);
+  const [graph, setGraph] = React.useState<GraphData>(GRAPH);
   const [activeId, setActiveId] = React.useState(DEMO_FILES[0].id);
   const [copied, setCopied] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [viewMode, setViewMode] = React.useState<"visual" | "raw">("visual");
   const [loadingExport, setLoadingExport] = React.useState(Boolean(scanId));
   const [exportError, setExportError] = React.useState<string | null>(null);
   const active = files.find((f) => f.id === activeId) ?? files[0] ?? DEMO_FILES[0];
 
   React.useEffect(() => {
     if (!scanId) return;
-
     let cancelled = false;
+
+    getScanGraph(scanId)
+      .then((g) => {
+        if (!cancelled) setGraph(g);
+      })
+      .catch(() => {
+        /* keep demo graph as a fallback */
+      });
+
     getScanExport(scanId)
       .then((bundle) => {
         if (cancelled) return;
-        const nextFiles = bundle.files.map((file): ContextFile => ({
-          id: file.path,
-          name: file.path,
-          group: groupForPath(file.path),
-          content: file.markdown,
-          nodeId: file.path.startsWith("node-context/")
-            ? file.path.replace(/^node-context\//, "").replace(/\.md$/, "")
-            : undefined,
-        }));
+        const nextFiles = bundle.files.map((file): ContextFile => {
+          const group = groupForPath(file.path);
+          return {
+            id: file.path,
+            name: file.path,
+            group,
+            content: file.markdown,
+            nodeId:
+              group === "node"
+                ? file.path.replace(/^node-context\//, "").replace(/\.md$/, "")
+                : undefined,
+            linkId:
+              group === "link"
+                ? file.path.replace(/^link-context\//, "").replace(/\.md$/, "")
+                : undefined,
+          };
+        });
         setFiles(nextFiles.length ? nextFiles : DEMO_FILES);
         setActiveId(nextFiles[0]?.id ?? DEMO_FILES[0].id);
       })
@@ -541,10 +242,16 @@ function ExportPageContent() {
     };
   }, [scanId]);
 
-  const jumpToNode = React.useCallback((nodeId: string) => {
-    const file = files.find((f) => f.nodeId === nodeId);
-    if (file) setActiveId(file.id);
-  }, [files]);
+  const jumpToNode = React.useCallback(
+    (nodeId: string) => {
+      const file = files.find((f) => f.nodeId === nodeId);
+      if (file) {
+        setActiveId(file.id);
+        setViewMode("visual");
+      }
+    },
+    [files],
+  );
 
   async function copyActive() {
     await navigator.clipboard.writeText(active.content);
@@ -572,11 +279,52 @@ function ExportPageContent() {
     );
   }
 
-  const nodeFiles = files.filter((f) => f.group === "node");
-  const linkFiles = files.filter((f) => f.group === "link");
-  const metadataFiles = files.filter((f) => f.group === "metadata");
+  const named = React.useMemo(
+    () => files.map((f) => ({ file: f, label: friendlyName(f, graph) })),
+    [files, graph],
+  );
+  const byLabel = (a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label);
+  const q = query.trim().toLowerCase();
+  const matches = (x: { label: string }) => !q || x.label.toLowerCase().includes(q);
+  const nodeFiles = named.filter((x) => x.file.group === "node" && matches(x)).sort(byLabel);
+  const linkFiles = named.filter((x) => x.file.group === "link" && matches(x)).sort(byLabel);
+  const otherFiles = named.filter((x) => (x.file.group === "brief" || x.file.group === "risk") && matches(x));
+  const activeLabel = friendlyName(active, graph);
+
+  // Resolve the structured object backing the active document.
   const activeNode =
-    !scanId && active.nodeId ? GRAPH.nodes.find((n) => n.id === active.nodeId) ?? null : null;
+    active.group === "node" && active.nodeId
+      ? graph.nodes.find((n) => n.id === active.nodeId) ?? null
+      : null;
+  const activeLink =
+    active.group === "link" && active.linkId
+      ? graph.links.find((l) => l.id === active.linkId) ?? null
+      : null;
+  const isBrief = active.name.includes("system-brief");
+  const isJson = active.name.endsWith(".json");
+  const hasVisual = isBrief || Boolean(activeNode) || Boolean(activeLink);
+
+  function renderVisual() {
+    if (isBrief) return <SystemBriefView graph={graph} repoLabel={repoLabel} />;
+    if (activeNode) return <NodeDocView node={activeNode} graph={graph} onJumpToNode={jumpToNode} />;
+    if (activeLink) return <LinkDocView link={activeLink} graph={graph} onJumpToNode={jumpToNode} />;
+    return renderRaw();
+  }
+
+  function renderRaw() {
+    if (isJson) {
+      return (
+        <pre className="scroll-thin overflow-x-auto rounded-md border border-line bg-code-bg p-3 font-mono text-[12px] leading-relaxed text-code">
+          {active.content}
+        </pre>
+      );
+    }
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+        {active.content}
+      </ReactMarkdown>
+    );
+  }
 
   return (
     <main className="flex h-screen flex-col bg-bg">
@@ -610,31 +358,30 @@ function ExportPageContent() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 overflow-hidden">
         {/* File tree */}
         <aside className="scroll-thin w-64 shrink-0 overflow-y-auto border-r border-line">
+          <div className="border-b border-line p-2">
+            <div className="flex items-center gap-2 rounded-md border border-line bg-bg px-2.5 py-1.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-faint" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search documents…"
+                className="w-full bg-transparent font-mono text-[12px] text-ink placeholder:text-faint focus:outline-none"
+              />
+            </div>
+          </div>
           <FileGroup icon={<FileText className="h-3 w-3" />} label="Overview">
-            {files.filter((f) => f.group === "brief").map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {otherFiles.map(({ file, label }) => (
+              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
-          <FileGroup icon={<ShieldAlert className="h-3 w-3 text-warn" />} label="Risk surface">
-            {files.filter((f) => f.group === "risk").map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
-            ))}
-          </FileGroup>
-          {metadataFiles.length > 0 && (
-            <FileGroup icon={<FileText className="h-3 w-3" />} label={`Metadata · ${metadataFiles.length}`}>
-              {metadataFiles.map((f) => (
-                <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
-              ))}
-            </FileGroup>
-          )}
           <FileGroup icon={<Boxes className="h-3 w-3" />} label={`Nodes · ${nodeFiles.length}`}>
-            {nodeFiles.map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {nodeFiles.map(({ file, label }) => (
+              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
           <FileGroup icon={<Share2 className="h-3 w-3" />} label={`Links · ${linkFiles.length}`}>
-            {linkFiles.map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {linkFiles.map(({ file, label }) => (
+              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
         </aside>
@@ -648,9 +395,33 @@ function ExportPageContent() {
           )}
 
           {/* Tab bar */}
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="truncate font-mono text-[12px] text-faint">{active.name}</span>
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+            <span className="truncate font-mono text-[12.5px] text-ink" title={active.name}>{activeLabel}</span>
             <div className="flex items-center gap-1.5">
+              {hasVisual && (
+                <div className="mr-1 flex items-center rounded-lg border border-line p-0.5">
+                  <button
+                    onClick={() => setViewMode("visual")}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] transition-colors duration-150",
+                      viewMode === "visual" ? "bg-surface-2 text-ink" : "text-faint hover:text-muted",
+                    )}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    Visual
+                  </button>
+                  <button
+                    onClick={() => setViewMode("raw")}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] transition-colors duration-150",
+                      viewMode === "raw" ? "bg-surface-2 text-ink" : "text-faint hover:text-muted",
+                    )}
+                  >
+                    <FileCode className="h-3.5 w-3.5" />
+                    Markdown
+                  </button>
+                </div>
+              )}
               <button
                 onClick={copyActive}
                 className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
@@ -659,9 +430,7 @@ function ExportPageContent() {
                 {copied ? "Copied" : "Copy .md"}
               </button>
               <button
-                onClick={() =>
-                  downloadBlob(active.name.split("/").pop()!, active.content)
-                }
+                onClick={() => downloadBlob(active.name.split("/").pop()!, active.content)}
                 className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -671,15 +440,8 @@ function ExportPageContent() {
           </div>
 
           <div className="scroll-thin flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-2xl px-8 py-8">
-              {/* Node files get the rich structured view */}
-              {activeNode ? (
-                <NodeDocView node={activeNode} onJumpToNode={jumpToNode} />
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                  {active.content}
-                </ReactMarkdown>
-              )}
+            <div className="mx-auto max-w-3xl px-8 py-8">
+              {hasVisual && viewMode === "visual" ? renderVisual() : renderRaw()}
             </div>
           </div>
         </section>

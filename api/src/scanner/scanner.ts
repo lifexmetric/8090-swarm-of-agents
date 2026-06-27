@@ -54,6 +54,14 @@ const QUEUE_PACKAGES = new Set([
   "@google-cloud/pubsub",
 ]);
 
+// Hosts that are not real service dependencies (specs, CDNs, registries, etc.)
+const IGNORED_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+]);
+const NON_SERVICE_HOST_RE = /(w3\.org|schema|example\.(com|org|net)|googleapis|gstatic|npmjs|github|githubusercontent|jsdelivr|unpkg|cloudflare)/;
+
 export interface ScannerOptions {
   maxFiles: number;
   maxFileBytes: number;
@@ -345,6 +353,24 @@ function scanTextFile(relativePath: string, text: string): {
         confidenceReason: "Known HTTP client call or helper appears in source.",
       });
       findings.push(findingFromEvidence("http", "http-client", line.trim(), ev));
+      snippets.push(ev);
+    }
+
+    // Service-to-service references: literal HTTP service URLs (e.g.
+    // "http://accounts-service:8002"). Used to draw inter-service edges.
+    for (const match of line.matchAll(/https?:\/\/([a-zA-Z0-9._-]+)(?::(\d+))?/g)) {
+      const host = match[1].toLowerCase();
+      if (IGNORED_HOSTS.has(host)) continue;
+      if (!host.includes(".") && !host.includes("-")) continue;
+      if (NON_SERVICE_HOST_RE.test(host)) continue;
+      const ev = evidenceFromLine({
+        filePath: relativePath,
+        line,
+        lineNumber,
+        detector: "service-url-reference",
+        confidenceReason: "Source references an HTTP service endpoint URL.",
+      });
+      findings.push(findingFromEvidence("http", host, match[2] ? `${host}:${match[2]}` : host, ev));
       snippets.push(ev);
     }
 

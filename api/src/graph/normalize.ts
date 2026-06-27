@@ -335,6 +335,50 @@ export function buildGraphFromArtifacts(args: {
     });
   }
 
+  // Service-to-service edges: literal HTTP service URLs found in source turn
+  // into external "service" nodes with an inbound call edge from the module.
+  const serviceFindings = artifacts.findings.filter(
+    (finding) => finding.kind === "http" && finding.detector === "service-url-reference",
+  );
+  for (const finding of serviceFindings) {
+    const host = finding.label;
+    const sourceModule = moduleNodeId(repository.id, moduleNameForFile(finding.filePath));
+    if (!nodes.has(sourceModule)) continue;
+    const serviceNodeId = stableId(repository.id, "service", host);
+    const evidence = [evidenceFromFinding(finding)];
+    if (!nodes.has(serviceNodeId)) {
+      addNode(nodes, {
+        id: serviceNodeId,
+        label: host,
+        kind: "external",
+        domain: "Service",
+        whatItIs: `HTTP service referenced at ${finding.value}.`,
+        whyItExists: "Called as a network service endpoint from repository source.",
+        owns: [],
+        confidence: "inferred",
+        risks: [],
+        repositoryId: repository.id,
+        evidence,
+      });
+    }
+    addLink(links, {
+      id: stableId(repository.id, "calls-service", sourceModule, host),
+      source: sourceModule,
+      target: serviceNodeId,
+      kind: "sync",
+      criticality: 3,
+      summary: `${moduleNameForFile(finding.filePath)} calls the ${host} service over HTTP.`,
+      code: finding.snippet,
+      codePath: `${finding.filePath}:L${finding.lineStart}`,
+      contract: `HTTP endpoint: ${finding.value}`,
+      failure: "Network failure or service downtime breaks this call path; verify timeouts, retries, and fallbacks.",
+      risks: [],
+      confidence: "inferred",
+      repositoryId: repository.id,
+      evidence,
+    });
+  }
+
   const envFindings = artifacts.findings.filter((finding) => finding.kind === "env");
   if (envFindings.length > 0) {
     const nodeId = stableId(repository.id, "env-config");

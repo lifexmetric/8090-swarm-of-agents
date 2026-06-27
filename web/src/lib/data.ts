@@ -21,6 +21,17 @@ export type EdgeKind =
   | "auth"
   | "webhook";
 
+/** A single piece of scanner evidence backing a node/edge claim. */
+export interface Evidence {
+  id?: string;
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  snippet: string;
+  detector: string;
+  confidenceReason: string;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
@@ -62,16 +73,6 @@ export interface GraphData {
   links: GraphLink[];
 }
 
-export interface Evidence {
-  id?: string;
-  filePath: string;
-  lineStart: number;
-  lineEnd: number;
-  snippet: string;
-  detector: string;
-  confidenceReason: string;
-}
-
 // ---------------------------------------------------------------------------
 // Visual tokens (kept here so the graph + panels + legend stay in sync)
 // ---------------------------------------------------------------------------
@@ -98,13 +99,13 @@ export const EDGE_KIND_META: Record<
   EdgeKind,
   { label: string; color: string; dashed: boolean }
 > = {
-  sync:    { label: "Sync API call",       color: "var(--color-muted)",        dashed: false },
-  async:   { label: "Async / queue",       color: "var(--color-node-infra)",   dashed: true  },
-  db:      { label: "DB read/write",       color: "var(--color-node-infra)",   dashed: false },
-  package: { label: "Package dependency",  color: "var(--color-muted)",        dashed: true  },
-  config:  { label: "Shared config",       color: "var(--color-node-neutral)", dashed: true  },
-  auth:    { label: "Auth delegation",     color: "var(--color-muted)",        dashed: false },
-  webhook: { label: "Webhook / callback",  color: "var(--color-node-external)", dashed: true  },
+  sync:    { label: "Sync API call",       color: "var(--color-edge-sync)",    dashed: false },
+  async:   { label: "Async / queue",       color: "var(--color-edge-async)",   dashed: true  },
+  db:      { label: "DB read/write",       color: "var(--color-edge-db)",      dashed: false },
+  package: { label: "Package dependency",  color: "var(--color-edge-package)", dashed: true  },
+  config:  { label: "Shared config",       color: "var(--color-edge-config)",  dashed: true  },
+  auth:    { label: "Auth delegation",     color: "var(--color-edge-auth)",    dashed: false },
+  webhook: { label: "Webhook / callback",  color: "var(--color-edge-webhook)", dashed: true  },
 };
 
 export const CONFIDENCE_META: Record<
@@ -716,50 +717,113 @@ export function dependentsOfIn(graph: GraphData, nodeId: string): GraphLink[] {
 // Agent context markdown generation (mirrors the PRD example)
 // ---------------------------------------------------------------------------
 
-export function linkContextMarkdown(link: GraphLink): string {
-  const { source, target } = linkEndpoints(link);
-  return `# ${source?.label} → ${target?.label}
-
-## What This Is
-${link.summary}
-
-## What Connects Here
-- Upstream: ${source?.label} (${source?.kind === "external" ? "external" : "internal"})
-- Downstream: ${target?.label} (${target?.kind === "external" ? "external" : "internal"})
-
-## Contract
-${link.contract}
-
-## Failure Behavior
-${link.failure}
-
-## Risk
-${link.risks.length ? link.risks.map((r) => `- ${r}`).join("\n") : "- None flagged"}
-
-## Confidence
-${CONFIDENCE_META[link.confidence].label}${
-    link.confidence === "confirmed"
-      ? " — explicit in code and confirmed by tests."
-      : link.confidence === "inferred"
-        ? " — inferred from code patterns."
-        : " — partially inferred, verify before relying on it."
-  }
-${
-  link.beforeYouChange
-    ? `\n## Before You Change This\n${link.beforeYouChange}\n`
-    : ""
-}`;
+/** Solid/empty block bar used to visualize a 1–5 criticality score. */
+function criticalityBar(c: number): string {
+  return "█".repeat(Math.max(0, Math.min(5, c))) + "░".repeat(Math.max(0, 5 - c));
 }
 
-export function nodeContextMarkdown(node: GraphNode): string {
-  const deps = dependenciesOf(node.id);
-  const dependents = dependentsOf(node.id);
+function criticalityNote(c: number): string {
+  if (c >= 5) return "on the critical path — failures here are user-visible and tend to cause incidents.";
+  if (c >= 4) return "high impact — changes here ripple to other services.";
+  if (c >= 3) return "moderate impact — degrades a feature, but not the whole system.";
+  if (c >= 2) return "limited impact — mostly contained to the two endpoints.";
+  return "peripheral — low blast radius.";
+}
+
+function confidenceNote(c: Confidence): string {
+  return c === "confirmed"
+    ? "Explicit in the code — high trust."
+    : c === "inferred"
+      ? "Inferred from code patterns — likely correct, but spot-check before relying on it."
+      : "Partially inferred — verify directly against the code before relying on it.";
+}
+
+/** Renders the scanner evidence (file, line range, detector, snippet) for handoff. */
+function evidenceSection(evidence?: Evidence[]): string {
+  if (!evidence || evidence.length === 0) {
+    return "_No direct evidence was captured for this item. Treat the claims above as inferred and confirm them against the code before relying on them._";
+  }
+  return evidence
+    .map((e, i) => {
+      const range =
+        e.lineEnd && e.lineEnd !== e.lineStart ? `L${e.lineStart}-L${e.lineEnd}` : `L${e.lineStart}`;
+      const parts = [
+        `**${i + 1}. \`${e.filePath}:${range}\`**`,
+        `- Detector: \`${e.detector}\``,
+      ];
+      if (e.confidenceReason) parts.push(`- Why it's trusted: ${e.confidenceReason}`);
+      if (e.snippet && e.snippet.trim()) {
+        parts.push("", "```", e.snippet.trimEnd(), "```");
+      }
+      return parts.join("\n");
+    })
+    .join("\n\n");
+}
+
+export function linkContextMarkdown(link: GraphLink, graph: GraphData = GRAPH): string {
+  const { source, target } = linkEndpoints(link, graph);
+  const ek = EDGE_KIND_META[link.kind];
+  const srcLabel = source?.label ?? link.source;
+  const tgtLabel = target?.label ?? link.target;
+  const srcKind = source ? NODE_KIND_META[source.kind].label : "unknown";
+  const tgtKind = target ? NODE_KIND_META[target.kind].label : "unknown";
+
+  return `# ${srcLabel} → ${tgtLabel}
+
+> Connection handoff context. Everything below is derived from a static scan of the repository; confidence and evidence are noted so you can trust or verify each claim without extra background.
+
+**Relationship:** ${ek.label} · **Criticality:** ${link.criticality}/5 · **Confidence:** ${CONFIDENCE_META[link.confidence].label}
+
+## TL;DR
+${link.summary}
+
+## Endpoints
+| Side | Component | Type |
+| --- | --- | --- |
+| Upstream (caller) | ${srcLabel} | ${srcKind} |
+| Downstream (callee) | ${tgtLabel} | ${tgtKind} |
+${source?.path || target?.path ? `\n- Upstream path: \`${source?.path ?? "n/a"}\`\n- Downstream path: \`${target?.path ?? "n/a"}\`\n` : ""}
+## How they connect (code)
+\`${link.codePath}\`
+\`\`\`
+${link.code}
+\`\`\`
+
+## Contract
+\`\`\`
+${link.contract}
+\`\`\`
+
+## Failure behavior
+${link.failure}
+
+## Criticality
+${criticalityBar(link.criticality)} ${link.criticality}/5 — ${criticalityNote(link.criticality)}
+
+## Confidence
+**${CONFIDENCE_META[link.confidence].label}** — ${confidenceNote(link.confidence)}
+
+## Risks
+${link.risks.length ? link.risks.map((r) => `- ${r}`).join("\n") : "- None flagged by the scan."}
+${link.beforeYouChange ? `\n## ⚠️ Before you change this\n${link.beforeYouChange}\n` : ""}
+## Evidence
+${evidenceSection(link.evidence)}
+
+## Change checklist
+- [ ] Confirm the contract above still matches the code at \`${link.codePath}\`.
+- [ ] Check the failure behavior — will your change alter how errors propagate?
+- [ ] Assess blast radius on **${tgtLabel}** and anything downstream of it.
+${link.beforeYouChange ? "- [ ] Honor the \"before you change\" note above.\n" : ""}- [ ] Add or update tests covering this ${ek.label.toLowerCase()}.
+`;
+}
+
+export function nodeContextMarkdown(node: GraphNode, graph: GraphData = GRAPH): string {
+  const deps = dependenciesOf(node.id, graph);
+  const dependents = dependentsOf(node.id, graph);
+  const maxCrit = [...deps, ...dependents].reduce((m, l) => Math.max(m, l.criticality), 0);
 
   function depBlock(link: GraphLink, direction: "out" | "in"): string {
-    const peer =
-      direction === "out"
-        ? nodeById(link.target)
-        : nodeById(link.source);
+    const peer = direction === "out" ? nodeById(link.target, graph) : nodeById(link.source, graph);
     const arrow = direction === "out" ? "→" : "←";
     const lines = [
       `### ${arrow} ${peer?.label ?? (direction === "out" ? link.target : link.source)} · ${EDGE_KIND_META[link.kind].label} · criticality ${link.criticality}/5`,
@@ -784,34 +848,60 @@ export function nodeContextMarkdown(node: GraphNode): string {
       lines.push(``, `**Risks:**`);
       link.risks.forEach((r) => lines.push(`- ${r}`));
     }
-    lines.push(``, `**Confidence:** ${CONFIDENCE_META[link.confidence].label}`);
+    if (link.evidence && link.evidence.length) {
+      lines.push(``, `**Evidence:**`);
+      link.evidence.forEach((e) => {
+        const range = e.lineEnd && e.lineEnd !== e.lineStart ? `L${e.lineStart}-L${e.lineEnd}` : `L${e.lineStart}`;
+        lines.push(`- \`${e.filePath}:${range}\` (${e.detector})`);
+      });
+    }
+    lines.push(``, `**Confidence:** ${CONFIDENCE_META[link.confidence].label} — ${confidenceNote(link.confidence)}`);
     return lines.join("\n");
   }
 
   return `# ${node.label}
 
+> Node handoff context. Generated from a static repository scan — enough to pick up work here without prior knowledge. Claims carry confidence and evidence so you know what to trust vs. verify.
+
 **Kind:** ${NODE_KIND_META[node.kind].label} · **Domain:** ${node.domain} · **Confidence:** ${CONFIDENCE_META[node.confidence].label}
 ${node.path ? `**Path:** \`${node.path}\`` : ""}
 
-## What This Is
+## At a glance
+- **Type:** ${NODE_KIND_META[node.kind].label}
+- **Domain:** ${node.domain}
+- **Location:** ${node.path ? `\`${node.path}\`` : "not resolved to a single path"}
+- **Fan-out (depends on):** ${deps.length}
+- **Blast radius (depended on by):** ${dependents.length}
+- **Max criticality touching this node:** ${maxCrit ? `${maxCrit}/5` : "—"}
+- **Confidence:** ${CONFIDENCE_META[node.confidence].label} — ${confidenceNote(node.confidence)}
+${maxCrit >= 4 ? "\n> ⚠️ This node sits on a critical path — changes here can ripple system-wide.\n" : ""}
+## What this is
 ${node.whatItIs}
 
-## Why It Exists
+## Why it exists
 ${node.whyItExists}
 
-## What It Owns
-${node.owns.length ? node.owns.map((o) => `- \`${o}\``).join("\n") : "- Nothing tracked"}
+## What it owns
+${node.owns.length ? node.owns.map((o) => `- \`${o}\``).join("\n") : "- Nothing tracked by the scan."}
 
-## Depends On (${deps.length} outbound)
+## Depends on (${deps.length} outbound)
 
-${deps.length ? deps.map((l) => depBlock(l, "out")).join("\n\n---\n\n") : "_No outbound dependencies._"}
+${deps.length ? deps.map((l) => depBlock(l, "out")).join("\n\n---\n\n") : "_No outbound dependencies detected._"}
 
-## Depended On By (${dependents.length} inbound · blast radius)
+## Depended on by (${dependents.length} inbound · blast radius)
 
 ${dependents.length ? dependents.map((l) => depBlock(l, "in")).join("\n\n---\n\n") : "_Nothing depends on this node._"}
 
-## Risk Flags
-${node.risks.length ? node.risks.map((r) => `- ${r}`).join("\n") : "- None flagged"}
+## Risk flags
+${node.risks.length ? node.risks.map((r) => `- ${r}`).join("\n") : "- None flagged by the scan."}
+
+## Evidence
+${evidenceSection(node.evidence)}
+
+## Change checklist
+- [ ] Read "What it owns" and the outbound dependencies before editing.
+- [ ] Check each of the ${dependents.length} inbound dependent(s) — they may break if you change this node's behavior.
+${maxCrit >= 4 ? "- [ ] This is on a critical path; coordinate and add tests before shipping.\n" : ""}- [ ] Verify any \"inferred\"/\"uncertain\" claims above against the code.
 `;
 }
 

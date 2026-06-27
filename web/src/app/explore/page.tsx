@@ -542,7 +542,14 @@ function ExplorePageContent() {
             <div className="space-y-1">
               {(Object.keys(EDGE_KIND_META) as Array<keyof typeof EDGE_KIND_META>).map((k) => (
                 <div key={k} className="flex items-center gap-2">
-                  <span className="h-px w-3 shrink-0" style={{ backgroundColor: EDGE_KIND_META[k].color }} />
+                  <span
+                    className="h-0 w-3.5 shrink-0"
+                    style={{
+                      borderTopWidth: 2,
+                      borderTopStyle: EDGE_KIND_META[k].dashed ? "dashed" : "solid",
+                      borderTopColor: EDGE_KIND_META[k].color,
+                    }}
+                  />
                   <span className="truncate text-[10px] text-muted">{EDGE_KIND_META[k].label}</span>
                 </div>
               ))}

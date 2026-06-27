@@ -33,6 +33,15 @@
   --color-warn: #fbbf24;
   --color-err:  #f87171;
 
+  /* ── Edge / relationship colors (distinct hue per connection type) ── */
+  --color-edge-sync:    #818cf8; /* indigo  — sync API call */
+  --color-edge-async:   #22d3ee; /* cyan    — async / queue */
+  --color-edge-db:      #34d399; /* green   — DB read/write */
+  --color-edge-package: #8b8d98; /* gray    — package dependency */
+  --color-edge-config:  #c084fc; /* violet  — shared config */
+  --color-edge-auth:    #f472b6; /* pink    — auth delegation */
+  --color-edge-webhook: #fb923c; /* orange  — webhook / callback */
+
   /* ── Code / graph / overlay ── */
   --color-code:       #a5b4fc;
   --color-code-bg:    #12131a;
@@ -88,6 +97,13 @@
   --color-node-infra:    #2563eb;
   --color-node-external: #ea6c0a;
   --color-node-neutral:  #6b6c78;
+  --color-edge-sync:     #4f52d9;
+  --color-edge-async:    #0891b2;
+  --color-edge-db:       #059669;
+  --color-edge-package:  #6b6c78;
+  --color-edge-config:   #9333ea;
+  --color-edge-auth:     #db2777;
+  --color-edge-webhook:  #ea6c0a;
   --color-code:          #4f52d9;
   --color-code-bg:       #f0f1f6;
   --color-overlay:       rgba(245, 246, 249, 0.92);
