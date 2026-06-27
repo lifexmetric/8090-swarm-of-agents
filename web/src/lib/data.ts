@@ -10,7 +10,9 @@ export type NodeKind =
   | "database"
   | "queue"
   | "auth"
-  | "config";
+  | "config"
+  | "folder"
+  | "file";
 
 export type EdgeKind =
   | "sync"
@@ -93,6 +95,8 @@ export const NODE_KIND_META: Record<
   queue:    { label: "Queue / Stream",       color: "var(--color-node-infra)",   group: "Infrastructure" },
   external: { label: "External Dependency",  color: "var(--color-node-external)", group: "External"       },
   config:   { label: "Config / Env",         color: "var(--color-node-neutral)", group: "Config"         },
+  folder:   { label: "Folder",               color: "var(--color-node-folder)",  group: "Code"           },
+  file:     { label: "File",                 color: "var(--color-node-file)",    group: "Code"           },
 };
 
 export const EDGE_KIND_META: Record<
@@ -122,6 +126,7 @@ export const NODE_GROUPS = [
   { key: "Internal",       color: "var(--color-node-service)",  desc: "Services and auth running inside your codebase" },
   { key: "Infrastructure", color: "var(--color-node-infra)",    desc: "Databases, queues, and message streams" },
   { key: "External",       color: "var(--color-node-external)", desc: "Third-party APIs and bank rails outside your control" },
+  { key: "Code",           color: "var(--color-node-folder)",   desc: "Folders and files in the scoped System View" },
 ] as const;
 
 // ---------------------------------------------------------------------------

@@ -14,8 +14,9 @@ import {
   Minus,
   MessageSquare,
   GitMerge,
-  Network,
   GitBranch,
+  FolderTree,
+  ChevronRight,
 } from "lucide-react";
 import {
   GRAPH,
@@ -32,6 +33,13 @@ import {
 } from "@/lib/data";
 import { ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
 import { Graph3D, type Graph3DHandle, type LayoutMode } from "@/components/Graph3D";
+import {
+  buildSystemGraph,
+  getSystemNodeMeta,
+  parentSystemScope,
+  type SystemProjection,
+  type SystemScope,
+} from "@/lib/system-view";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
@@ -73,6 +81,10 @@ function ExplorePageContent() {
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
   const [criticalPathMode, setCriticalPathMode] = React.useState(false);
   const [layoutMode, setLayoutMode] = React.useState<LayoutMode>("hierarchy");
+  const [systemScopeState, setSystemScopeState] = React.useState<{
+    graphKey: string | null;
+    scope: SystemScope;
+  }>({ graphKey: null, scope: { repositoryId: null, path: "" } });
   const [graphLoad, setGraphLoad] = React.useState<{
     key: string;
     graph: GraphData | null;
@@ -161,26 +173,53 @@ function ExplorePageContent() {
   const apiNotice = activeGraphLoad?.apiNotice ?? (isGraphLoading ? "Loading graph..." : null);
   const graphEmpty = Boolean(activeGraphLoad && !activeGraphLoad.apiNotice && graph.nodes.length === 0);
 
+  const systemScope = React.useMemo<SystemScope>(
+    () => systemScopeState.graphKey === graphKey
+      ? systemScopeState.scope
+      : { repositoryId: null, path: "" },
+    [graphKey, systemScopeState],
+  );
+
+  const systemProjection = React.useMemo<SystemProjection | null>(() => {
+    if (layoutMode !== "system") return null;
+    return buildSystemGraph(graph, systemScope, {
+      repoLabel: displayRepoLabel,
+      forceRepositoryLayer: !scanId && !isSystemDetail && !systemScope.repositoryId,
+    });
+  }, [displayRepoLabel, graph, isSystemDetail, layoutMode, scanId, systemScope]);
+
+  const viewGraph = systemProjection?.graph ?? graph;
+  const systemParent = systemProjection ? parentSystemScope(systemProjection) : null;
+
+  const goToSystemScope = React.useCallback((scope: SystemScope) => {
+    setSystemScopeState({ graphKey, scope: { repositoryId: scope.repositoryId ?? null, path: scope.path ?? "" } });
+    setSelectedNodeId(null);
+    setSelectedLinkId(null);
+    setCriticalPathMode(false);
+    setNodeHistory([]);
+    setPanelView("overview");
+  }, [graphKey]);
+
   const criticalPathNodeIds = React.useMemo(() => {
     const demoNodesPresent = [...CRITICAL_PATH_NODE_IDS].every((id) =>
-      graph.nodes.some((node) => node.id === id),
+      viewGraph.nodes.some((node) => node.id === id),
     );
     if (demoNodesPresent) return CRITICAL_PATH_NODE_IDS;
     return new Set(
-      graph.links
+      viewGraph.links
         .filter((link) => link.criticality >= 5)
         .flatMap((link) => [link.source, link.target]),
     );
-  }, [graph]);
+  }, [viewGraph]);
 
   const criticalPathLinkIds = React.useMemo(
     () =>
       new Set(
-        graph.links
+        viewGraph.links
           .filter((link) => criticalPathNodeIds.has(link.source) && criticalPathNodeIds.has(link.target))
           .map((link) => link.id),
       ),
-    [criticalPathNodeIds, graph.links],
+    [criticalPathNodeIds, viewGraph.links],
   );
 
   const selectNode = React.useCallback((id: string) => {
@@ -199,7 +238,7 @@ function ExplorePageContent() {
   const drillDown = React.useCallback((id: string) => {
     setSelectedNodeId((current) => {
       if (current) {
-        const currentNode = nodeById(current, graph);
+        const currentNode = nodeById(current, viewGraph);
         if (currentNode) setNodeHistory((h) => [...h, currentNode]);
       }
       return id;
@@ -207,7 +246,7 @@ function ExplorePageContent() {
     setPanelView("subgraph");
     setSelectedLinkId(null);
     setCriticalPathMode(false);
-  }, [graph]);
+  }, [viewGraph]);
 
   const goBack = React.useCallback(() => {
     setNodeHistory((h) => {
@@ -220,13 +259,42 @@ function ExplorePageContent() {
   }, []);
 
   const handleDoubleClickNode = React.useCallback((id: string) => {
-    const node = nodeById(id, graph);
-    if (!isSystemDetail && node?.scanId) {
+    const node = nodeById(id, viewGraph);
+    if (layoutMode === "system") {
+      const meta = getSystemNodeMeta(node);
+      if (!meta) {
+        if (node) {
+          setSelectedNodeId(node.id);
+          setSelectedLinkId(null);
+          graphRef.current?.focusNode(node.id);
+        }
+        return;
+      }
+
+      setNodeHistory([]);
+      setPanelView("overview");
+      setCriticalPathMode(false);
+      setSelectedLinkId(null);
+      setSelectedNodeId(null);
+
+      if (meta.type === "repo" && meta.scanId && !isSystemDetail) {
+        router.push(`/explore?scanId=${encodeURIComponent(meta.scanId)}&view=detail`);
+        return;
+      }
+
+      if (meta.type === "repo" || meta.type === "folder" || meta.type === "file") {
+        setSystemScopeState({ graphKey, scope: { repositoryId: meta.repositoryId, path: meta.path } });
+      }
+      return;
+    }
+
+    const sourceNode = nodeById(id, graph);
+    if (!isSystemDetail && sourceNode?.scanId) {
       setNodeHistory([]);
       setSelectedLinkId(null);
       setSelectedNodeId(null);
       setCriticalPathMode(false);
-      router.push(`/explore?scanId=${encodeURIComponent(node.scanId)}&view=detail`);
+      router.push(`/explore?scanId=${encodeURIComponent(sourceNode.scanId)}&view=detail`);
       return;
     }
 
@@ -236,7 +304,7 @@ function ExplorePageContent() {
     setSelectedNodeId(id);
     setPanelView("subgraph");
     graphRef.current?.focusNode(id);
-  }, [graph, isSystemDetail, router]);
+  }, [graph, graphKey, isSystemDetail, layoutMode, router, viewGraph]);
 
   const selectLink = React.useCallback((id: string) => {
     setCriticalPathMode(false);
@@ -268,7 +336,7 @@ function ExplorePageContent() {
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const deps = dependenciesOf(selectedNodeId, graph);
+        const deps = dependenciesOf(selectedNodeId, viewGraph);
         if (deps.length > 0) {
           const next = deps[0].target;
           setSelectedNodeId(next);
@@ -281,7 +349,7 @@ function ExplorePageContent() {
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const parents = dependentsOf(selectedNodeId, graph);
+        const parents = dependentsOf(selectedNodeId, viewGraph);
         if (parents.length > 0) {
           const prev = parents[0].source;
           setSelectedNodeId(prev);
@@ -295,11 +363,11 @@ function ExplorePageContent() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [graph, selectedNodeId, selectNode]);
+  }, [viewGraph, selectedNodeId, selectNode]);
 
   const filtered: GraphData = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    const nodes = graph.nodes.filter((n) => {
+    const nodes = viewGraph.nodes.filter((n) => {
       if (!activeKinds.has(n.kind)) return false;
       if (highRiskOnly && n.risks.length === 0) return false;
       if (q && !(
@@ -311,13 +379,13 @@ function ExplorePageContent() {
       return true;
     });
     const ids = new Set(nodes.map((n) => n.id));
-    return { nodes, links: graph.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
-  }, [graph, query, activeKinds, highRiskOnly]);
+    return { nodes, links: viewGraph.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
+  }, [viewGraph, query, activeKinds, highRiskOnly]);
 
-  const selectedNode = selectedNodeId ? graph.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
-  const selectedLink = selectedLinkId ? graph.links.find((l) => l.id === selectedLinkId) ?? null : null;
+  const selectedNode = selectedNodeId ? viewGraph.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+  const selectedLink = selectedLinkId ? viewGraph.links.find((l) => l.id === selectedLinkId) ?? null : null;
   const panelOpen = Boolean(selectedNode || selectedLink);
-  const highRiskCount = graph.nodes.filter((n) => n.risks.length > 0).length;
+  const highRiskCount = viewGraph.nodes.filter((n) => n.risks.length > 0).length;
   const exportHref = scanId
     ? `/export?scanId=${encodeURIComponent(scanId)}&repo=${encodeURIComponent(displayRepoLabel)}`
     : "/export";
@@ -451,17 +519,17 @@ function ExplorePageContent() {
                   <span className="hidden md:inline">{graph.nodes.length > 35 ? "Bands" : "Hierarchy"}</span>
                 </button>
                 <button
-                  onClick={() => setLayoutMode("flow")}
-                  aria-label="Flow layout"
+                  onClick={() => setLayoutMode("system")}
+                  aria-label="System view"
                   className={cn(
                     "flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[12px] transition-colors duration-150",
-                    layoutMode === "flow"
+                    layoutMode === "system"
                       ? "bg-accent/10 text-accent"
                       : "text-muted hover:text-ink",
                   )}
                 >
-                  <Network className="h-3 w-3" />
-                  <span className="hidden md:inline">Flow</span>
+                  <FolderTree className="h-3 w-3" />
+                  <span className="hidden md:inline">System</span>
                 </button>
               </div>
               <Link
@@ -548,6 +616,44 @@ function ExplorePageContent() {
             </button>
           </div>
         </div>
+
+        {layoutMode === "system" && systemProjection && (
+          <div className="pointer-events-auto border-b border-line bg-bg/80 backdrop-blur-sm">
+            <div className="mx-auto flex h-9 max-w-[1600px] items-center gap-2 overflow-x-auto px-4">
+              <button
+                onClick={() => systemParent && goToSystemScope(systemParent)}
+                disabled={!systemParent}
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[12px] text-muted transition-colors duration-150 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Up
+              </button>
+              <div className="h-4 w-px shrink-0 bg-line" />
+              <div className="flex min-w-0 items-center gap-1">
+                {systemProjection.breadcrumbs.map((crumb, index) => (
+                  <React.Fragment key={`${crumb.scope.repositoryId ?? "workspace"}:${crumb.scope.path ?? ""}:${index}`}>
+                    {index > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-faint" />}
+                    <button
+                      onClick={() => goToSystemScope(crumb.scope)}
+                      className={cn(
+                        "max-w-[180px] shrink-0 truncate rounded-md px-2 py-1 font-mono text-[11px] transition-colors duration-150",
+                        index === systemProjection.breadcrumbs.length - 1
+                          ? "bg-accent/10 text-accent"
+                          : "text-muted hover:bg-surface hover:text-ink",
+                      )}
+                      title={crumb.label}
+                    >
+                      {crumb.label}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+              <span className="ml-auto shrink-0 font-mono text-[11px] text-faint">
+                {viewGraph.nodes.length} visible · {viewGraph.links.length} links
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="pointer-events-none absolute left-3 top-28 z-20 hidden sm:block">
@@ -559,7 +665,7 @@ function ExplorePageContent() {
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                 <span className="text-[11px] font-medium" style={{ color: g.color }}>{g.key}</span>
                 <span className="ml-auto font-mono text-[10px] text-faint">
-                  {g.key === "Internal" ? "code" : g.key === "Infrastructure" ? "data" : "apis"}
+                  {g.key === "Internal" ? "code" : g.key === "Infrastructure" ? "data" : g.key === "External" ? "apis" : "files"}
                 </span>
                 <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden w-56 -translate-y-1/2 rounded-lg border border-line bg-bg-2 p-2 text-[11px] leading-relaxed text-muted group-hover:block">
                   {g.desc}
@@ -603,6 +709,8 @@ function ExplorePageContent() {
           <div className="rounded-lg border border-line bg-bg/80 px-3.5 py-2 font-mono text-[12px] text-faint backdrop-blur-sm">
             {criticalPathMode
               ? "Critical path highlighted · click any node to explore · Esc to clear"
+              : layoutMode === "system"
+                ? "System view · double-click folders/files to enter · use breadcrumb to go back"
               : selectedNodeId
                 ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
                 : "Top-down flow · drag to pan · scroll to zoom · click any node"}
@@ -641,7 +749,7 @@ function ExplorePageContent() {
             {selectedNode && (
               <NodePanel
                 node={selectedNode}
-                graphData={graph}
+                graphData={viewGraph}
                 onClose={() => selectNode("")}
                 onFocus={() => graphRef.current?.focusNode(selectedNode.id)}
                 onSelectLink={selectLink}
@@ -655,7 +763,7 @@ function ExplorePageContent() {
             {selectedLink && (
               <LinkPanel
                 link={selectedLink}
-                graphData={graph}
+                graphData={viewGraph}
                 onClose={() => selectNode("")}
                 onSelectNode={selectNode}
               />

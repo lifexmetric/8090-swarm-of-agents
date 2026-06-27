@@ -11,6 +11,8 @@ import {
   KeyRound,
   Package,
   Webhook,
+  Folder,
+  FileCode2,
   type LucideIcon,
 } from "lucide-react";
 import type { EdgeKind, NodeKind } from "@/lib/data";
@@ -22,6 +24,8 @@ export const NODE_ICON: Record<NodeKind, LucideIcon> = {
   queue: Workflow,
   auth: ShieldCheck,
   config: SlidersHorizontal,
+  folder: Folder,
+  file: FileCode2,
 };
 
 export const EDGE_ICON: Record<EdgeKind, LucideIcon> = {

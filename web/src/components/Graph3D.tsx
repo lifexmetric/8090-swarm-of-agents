@@ -30,7 +30,7 @@ interface Graph3DProps {
   layoutMode?: LayoutMode;
 }
 
-export type LayoutMode = "hierarchy" | "flow";
+export type LayoutMode = "hierarchy" | "system";
 
 type Point = { x: number; y: number };
 
@@ -619,8 +619,6 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
       // on the element directly (not via React) so we can mark it non-passive.
       el.addEventListener("wheel", onWheel, { passive: false });
       return () => el.removeEventListener("wheel", onWheel);
-    // Intentional: capture view/smooth in closure; effect re-registers when they change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [view, smooth]);
 
     // Lazily update cull viewport — during active drag use stale bounds.
@@ -641,10 +639,11 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
       return () => clearTimeout(cullTimerRef.current);
     }, [view, size]);
 
-    // ── Layout: curated demo, band (large), dagre (small-medium), or flow ──
+    // ── Layout: curated demo, band (large), dagre (small-medium), or system ──
     const layout = React.useMemo<Layout>(() => {
       const isDemo = data.nodes.length > 0 && data.nodes.every((n) => DEMO_POSITIONS[n.id]);
       if (isDemo) return buildDemoLayout(data);
+      if (layoutMode === "system") return buildDagreLayout(data);
       if (layoutMode === "hierarchy") {
         return data.nodes.length > BAND_THRESHOLD
           ? buildBandLayout(data)
@@ -653,7 +652,10 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
       return buildAutoLayout(data);
     }, [data, layoutMode]);
 
-    const swimlanes: Swimlane[] = (layout as DagreLayout | BandLayout).swimlanes ?? [];
+    const swimlanes = React.useMemo<Swimlane[]>(
+      () => (layout as DagreLayout | BandLayout).swimlanes ?? [],
+      [layout],
+    );
 
     const centerOf = React.useCallback(
       (id: string): Point | null => {
@@ -936,7 +938,6 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
             </g>
           );
         }),
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       [swimlanes, layout.width, isBandLayout],
     );
 
@@ -1084,6 +1085,9 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
           }
 
           const deg = degree.get(node.id) ?? { in: 0, out: 0 };
+          const systemCount = (node.kind === "folder" || node.kind === "file") && node.owns.length > 0
+            ? node.owns[0]
+            : null;
           return (
             <button
               key={node.id}
@@ -1123,7 +1127,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                   className="truncate font-mono text-[9px] uppercase tracking-wide"
                   style={{ color: domColor || "var(--color-faint)", opacity: 0.75 }}
                 >
-                  {node.domain || meta.group}
+                  {systemCount ?? node.domain ?? meta.group}
                 </span>
                 <span className="font-mono text-[9px] text-faint shrink-0">
                   {deg.in}↓{deg.out}↑

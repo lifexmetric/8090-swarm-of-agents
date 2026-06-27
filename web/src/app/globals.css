@@ -27,6 +27,8 @@
   --color-node-infra:    #60a5fa;
   --color-node-external: #fb923c;
   --color-node-neutral:  #5c5e6a;
+  --color-node-folder:   #a78bfa;
+  --color-node-file:     #38bdf8;
 
   /* ── Semantic status ── */
   --color-ok:   #34d399;
@@ -97,6 +99,8 @@
   --color-node-infra:    #2563eb;
   --color-node-external: #ea6c0a;
   --color-node-neutral:  #6b6c78;
+  --color-node-folder:   #7c3aed;
+  --color-node-file:     #0284c7;
   --color-edge-sync:     #4f52d9;
   --color-edge-async:    #0891b2;
   --color-edge-db:       #059669;

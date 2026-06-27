@@ -123,29 +123,30 @@ function Donut({
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   const r = 42;
   const C = 2 * Math.PI * r;
-  let offset = 0;
+  const slices = segments.reduce<Array<{ segment: (typeof segments)[number]; len: number; offset: number }>>(
+    (items, segment) => {
+      const offset = items.reduce((sum, item) => sum + item.len, 0);
+      return [...items, { segment, len: (segment.value / total) * C, offset }];
+    },
+    [],
+  );
   return (
     <div className="flex items-center gap-4">
       <svg width={108} height={108} viewBox="0 0 108 108" className="shrink-0 -rotate-90">
         <circle cx={54} cy={54} r={r} fill="none" stroke="var(--color-surface)" strokeWidth={12} />
-        {segments.map((seg) => {
-          const len = (seg.value / total) * C;
-          const el = (
-            <circle
-              key={seg.label}
-              cx={54}
-              cy={54}
-              r={r}
-              fill="none"
-              stroke={seg.color}
-              strokeWidth={12}
-              strokeDasharray={`${len} ${C - len}`}
-              strokeDashoffset={-offset}
-            />
-          );
-          offset += len;
-          return el;
-        })}
+        {slices.map(({ segment, len, offset }) => (
+          <circle
+            key={segment.label}
+            cx={54}
+            cy={54}
+            r={r}
+            fill="none"
+            stroke={segment.color}
+            strokeWidth={12}
+            strokeDasharray={`${len} ${C - len}`}
+            strokeDashoffset={-offset}
+          />
+        ))}
       </svg>
       <div className="min-w-0">
         <div className="mb-2 rotate-0 font-mono">
