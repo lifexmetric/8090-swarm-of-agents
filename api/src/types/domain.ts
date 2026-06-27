@@ -12,6 +12,7 @@ export type EdgeKind =
   | "sync"
   | "async"
   | "db"
+  | "package"
   | "config"
   | "auth"
   | "webhook";

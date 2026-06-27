@@ -58,6 +58,11 @@ function evidenceForProducedPackage(graph: GraphData, repo: RepositoryRecord, pa
     .slice(0, 6);
 }
 
+function dependencyVersion(link: GraphLink, packageName: string): string {
+  const prefix = `package.json dependency ${packageName}@`;
+  return link.contract.startsWith(prefix) ? link.contract.slice(prefix.length) : "declared";
+}
+
 export function buildWorkspaceGraph(args: {
   workspaceId: string;
   repositories: RepositoryRecord[];
@@ -112,6 +117,19 @@ export function buildWorkspaceGraph(args: {
       if (sourceEvidence.length === 0 || targetEvidence.length === 0) continue;
       const evidence = [...sourceEvidence, ...targetEvidence];
       const id = stableId("cross-repo", sourceRepo.id, targetRepo.id, packageName);
+      const version = dependencyVersion(link, packageName);
+      const relationshipSummary =
+        `${sourceRepo.owner}/${sourceRepo.name} consumes the npm package ${packageName}, ` +
+        `which is produced by ${targetRepo.owner}/${targetRepo.name}. ` +
+        "This is a package-level code dependency, not a direct network call.";
+      const relationshipContract = [
+        "Relationship type: Package consumer -> package producer",
+        `Consumer repo: ${sourceRepo.owner}/${sourceRepo.name}`,
+        `Producer repo: ${targetRepo.owner}/${targetRepo.name}`,
+        `Package: ${packageName}`,
+        `Version range: ${version}`,
+        "Mechanism: package.json dependency resolved through the package registry",
+      ].join("\n");
       crossRepoConnections.push({
         id,
         sourceRepositoryId: sourceRepo.id,
@@ -121,22 +139,27 @@ export function buildWorkspaceGraph(args: {
         sourceEvidence,
         targetEvidence,
         evidence,
-        summary: `${sourceRepo.owner}/${sourceRepo.name} depends on package ${packageName}, which is produced by ${targetRepo.owner}/${targetRepo.name}.`,
+        summary: relationshipSummary,
       });
 
       links.push({
         id,
         source: sourceSystem.id,
         target: targetSystem.id,
-        kind: "config",
+        kind: "package",
         criticality: 3,
-        summary: `${sourceRepo.owner}/${sourceRepo.name} depends on package ${packageName} from ${targetRepo.owner}/${targetRepo.name}.`,
+        summary: relationshipSummary,
         code: evidence[0]?.snippet ?? `package dependency ${packageName}`,
         codePath: `${evidence[0]?.filePath ?? "package.json"}:L${evidence[0]?.lineStart ?? 1}`,
-        contract: `Cross-repo package relationship: ${packageName}`,
-        failure: "Version mismatch or package publishing failure can break the dependent repository.",
+        contract: relationshipContract,
+        failure:
+          `If ${targetRepo.owner}/${targetRepo.name} changes the ${packageName} package API, package name, ` +
+          `or published compatible versions, ${sourceRepo.owner}/${sourceRepo.name} can fail during install, build, or runtime.`,
         risks: [],
         confidence: "confirmed",
+        beforeYouChange:
+          `Check both sides before changing this relationship: ${sourceRepo.owner}/${sourceRepo.name} declares ` +
+          `${packageName}@${version}, and ${targetRepo.owner}/${targetRepo.name} declares package name ${packageName}.`,
         evidence,
       });
     }

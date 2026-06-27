@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus,
+  ArrowLeft, Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus,
 } from "lucide-react";
 import {
   NODE_KIND_META,
@@ -18,7 +18,7 @@ import {
   type GraphNode,
   type NodeKind,
 } from "@/lib/data";
-import { ATLAS_WORKSPACE_ID, getScan, getWorkspaceGraph } from "@/lib/api";
+import { ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
 import { Graph3D, type Graph3DHandle } from "@/components/Graph3D";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
@@ -40,8 +40,10 @@ export default function ExplorePage() {
 
 function ExplorePageContent() {
   const graphRef = React.useRef<Graph3DHandle>(null);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const scanId = searchParams.get("scanId");
+  const isSystemDetail = Boolean(scanId && searchParams.get("view") === "detail");
 
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = React.useState<string | null>(null);
@@ -61,10 +63,26 @@ function ExplorePageContent() {
 
   React.useEffect(() => {
     let cancelled = false;
-    const key = scanId ? `scan:${scanId}` : `workspace:${ATLAS_WORKSPACE_ID}`;
+    const key = isSystemDetail && scanId
+      ? `detail:${scanId}`
+      : scanId
+      ? `scan:${scanId}`
+      : `workspace:${ATLAS_WORKSPACE_ID}`;
 
     async function load() {
       try {
+        if (isSystemDetail && scanId) {
+          const [scan, detailGraph] = await Promise.all([getScan(scanId), getScanGraph(scanId)]);
+          if (cancelled) return;
+          setGraphLoad({
+            key,
+            graph: detailGraph,
+            repoLabel: `${scan.repoUrl.replace(/^https:\/\/github\.com\//, "")} · detail`,
+            apiNotice: null,
+          });
+          return;
+        }
+
         if (scanId) {
           const scan = await getScan(scanId);
           const workspaceGraph = await getWorkspaceGraph(scan.workspaceId);
@@ -107,12 +125,17 @@ function ExplorePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [scanId]);
+  }, [isSystemDetail, scanId]);
 
-  const graphKey = scanId ? `scan:${scanId}` : `workspace:${ATLAS_WORKSPACE_ID}`;
+  const graphKey = isSystemDetail && scanId
+    ? `detail:${scanId}`
+    : scanId
+    ? `scan:${scanId}`
+    : `workspace:${ATLAS_WORKSPACE_ID}`;
   const activeGraphLoad = graphLoad?.key === graphKey ? graphLoad : null;
   const graph = activeGraphLoad?.graph ?? EMPTY_GRAPH;
   const repoLabel = activeGraphLoad?.repoLabel ?? `workspace:${ATLAS_WORKSPACE_ID}`;
+  const displayRepoLabel = isSystemDetail ? repoLabel.replace(/ · detail$/, "") : repoLabel;
   const isGraphLoading = !activeGraphLoad;
   const apiNotice = activeGraphLoad?.apiNotice ?? (isGraphLoading ? "Loading real graph…" : null);
   const graphUnavailable = Boolean(activeGraphLoad && activeGraphLoad.apiNotice && !activeGraphLoad.graph);
@@ -165,14 +188,23 @@ function ExplorePageContent() {
     });
   }, []);
 
-  // Double-click a node -> open sub-graph tab directly.
+  // Double-click a system node to enter its scan-level graph; inside a system it opens the local sub-graph.
   const handleDoubleClickNode = React.useCallback((id: string) => {
+    const node = nodeByIdForGraph(id);
+    if (!isSystemDetail && node?.scanId) {
+      setNodeHistory([]);
+      setSelectedLinkId(null);
+      setSelectedNodeId(null);
+      router.push(`/explore?scanId=${encodeURIComponent(node.scanId)}&view=detail`);
+      return;
+    }
+
     setNodeHistory([]);
     setSelectedLinkId(null);
     setSelectedNodeId(id);
     setPanelView("subgraph");
     graphRef.current?.focusNode(id);
-  }, []);
+  }, [isSystemDetail, nodeByIdForGraph, router]);
 
   const selectLink = React.useCallback((id: string) => {
     setSelectedNodeId(null);
@@ -306,8 +338,31 @@ function ExplorePageContent() {
             <Logo />
             <div className="h-4 w-px bg-[#2a2c36]" />
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-[#5c5e6a]">
-              <GithubMark className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden font-mono sm:inline">{repoLabel}</span>
+              {isSystemDetail ? (
+                <>
+                  <Link
+                    href="/explore"
+                    className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#2a2c36] px-2 py-1 font-mono text-[12px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    Workspace
+                  </Link>
+                  <span className="shrink-0 font-mono text-[12px] text-[#3a3c48]">/</span>
+                  <GithubMark className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
+                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                    Inside system
+                  </span>
+                </>
+              ) : (
+                <>
+                  <GithubMark className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
+                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                    System map
+                  </span>
+                </>
+              )}
             </div>
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center gap-1 rounded-lg border border-[#2a2c36] bg-[#181a22]">
@@ -456,7 +511,7 @@ function ExplorePageContent() {
             <div className="space-y-1">
               {[
                 { key: "↑ / ↓", label: "Traverse" },
-                { key: "Dbl-click", label: "Sub-graph" },
+                { key: "Dbl-click", label: isSystemDetail ? "Sub-graph" : "Enter" },
                 { key: "Esc", label: "Deselect" },
               ].map((s) => (
                 <div key={s.key} className="flex items-center justify-between gap-2">
@@ -475,7 +530,9 @@ function ExplorePageContent() {
           <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/80 px-3.5 py-2 font-mono text-[12px] text-[#5c5e6a] backdrop-blur-sm">
               {apiNotice ?? (selectedNodeId
               ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
-              : "Top-down flow · drag to pan · scroll to zoom · click any node")}
+              : isSystemDetail
+              ? "Inside system · click Workspace to go back up · double-click a node for sub-graph"
+              : "System map · double-click a system to enter · drag to pan · scroll to zoom")}
           </div>
         </div>
       )}

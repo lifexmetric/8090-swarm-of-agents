@@ -83,6 +83,13 @@ function linkPath(source: Point, target: Point): string {
   return `M ${source.x} ${source.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${target.x} ${target.y}`;
 }
 
+function relationshipLabel(link: GraphLink): string {
+  const packageMatch = link.contract.match(/^Package:\s*(.+)$/m);
+  if (packageMatch?.[1]) return `uses ${packageMatch[1]}`;
+  const typeMatch = link.contract.match(/^Relationship type:\s*(.+)$/m);
+  return typeMatch?.[1] ?? EDGE_KIND_META[link.kind].label;
+}
+
 export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
   function Graph3D(
     {
@@ -417,6 +424,11 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
               const width = active ? 2.2 + link.criticality * 0.18 : 1.1;
               const glowOpacity = active ? 0.58 : hasSelection ? 0 : 0.12;
               const strokeColor = dim ? "#222" : isCritical ? "#f87171" : meta.color;
+              const label = relationshipLabel(link);
+              const showLabel = active || (!hasSelection && data.links.length <= 12);
+              const labelX = (source.x + target.x) / 2;
+              const labelY = (source.y + target.y) / 2 - 18;
+              const labelWidth = Math.min(190, Math.max(72, label.length * 6.2 + 18));
               return (
                 <g key={link.id} data-graph-control="true">
                   <path
@@ -454,6 +466,37 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                       onSelectLink(link.id);
                     }}
                   />
+                  {showLabel && !dim && (
+                    <g
+                      className="cursor-pointer"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectLink(link.id);
+                      }}
+                    >
+                      <rect
+                        x={labelX - labelWidth / 2}
+                        y={labelY - 10}
+                        width={labelWidth}
+                        height={21}
+                        rx={6}
+                        fill="#0c0d10"
+                        stroke="#2a2c36"
+                        strokeWidth={1}
+                        opacity={0.94}
+                      />
+                      <text
+                        x={labelX}
+                        y={labelY + 4}
+                        textAnchor="middle"
+                        fill={active ? "#e8e9ed" : "#8b8d98"}
+                        fontSize={10}
+                        fontFamily="var(--font-mono)"
+                      >
+                        {label.length > 24 ? `${label.slice(0, 23)}...` : label}
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })}

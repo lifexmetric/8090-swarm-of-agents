@@ -384,8 +384,13 @@ describe("workspace graph merge", () => {
     expect(workspace.nodes.every((node) => node.domain === "System")).toBe(true);
     expect(workspace.crossRepoConnections[0].sourceEvidence.every((item) => item.detector === "package-json-dependency")).toBe(true);
     expect(workspace.crossRepoConnections[0].targetEvidence.every((item) => item.detector === "package-json-name")).toBe(true);
-    const crossRepoLink = workspace.links.find((link) => link.contract.includes("Cross-repo package relationship"));
+    const crossRepoLink = workspace.links.find((link) => link.contract.includes("Relationship type: Package consumer -> package producer"));
     expect(crossRepoLink).toBeDefined();
+    expect(crossRepoLink?.summary).toContain("package-level code dependency");
+    expect(crossRepoLink?.contract).toContain("Consumer repo: atlas/app");
+    expect(crossRepoLink?.contract).toContain("Producer repo: fastify/fastify-plugin");
+    expect(crossRepoLink?.beforeYouChange).toContain("fastify-plugin@^5.0.0");
+    expect(crossRepoLink?.kind).toBe("package");
     expect(workspace.nodes.some((node) => node.id === crossRepoLink?.source)).toBe(true);
     expect(workspace.nodes.some((node) => node.id === crossRepoLink?.target)).toBe(true);
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -437,7 +442,7 @@ describe("workspace graph merge", () => {
     expect(workspace.crossRepoConnections).toHaveLength(0);
     expect(workspace.nodes).toHaveLength(2);
     expect(workspace.nodes.every((node) => node.domain === "System")).toBe(true);
-    expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(false);
+    expect(workspace.links.some((link) => link.contract.includes("Relationship type: Package consumer -> package producer"))).toBe(false);
   });
 });
 
