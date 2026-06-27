@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "start:railway": "node dist/scripts/migrate.js && node dist/server.js",
     "test": "vitest run tests",
     "test:e2e": "playwright test",
     "typecheck": "tsc -p tsconfig.json --noEmit",

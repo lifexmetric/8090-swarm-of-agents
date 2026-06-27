@@ -1,0 +1,9 @@
+node_modules
+dist
+.atlas
+.env
+.env.*
+coverage
+test-results
+playwright-report
+npm-debug.log*
