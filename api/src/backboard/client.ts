@@ -536,6 +536,20 @@ ${safeQuestion}
 ${compactContext}`;
 }
 
+function neutralizeUnsupportedConfidence(content: string): string {
+  return content
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (!/^\s*Confidence\s*:/i.test(line)) return true;
+      return !/(confirmed|grounded|retrieved scan evidence|verified|evidence-backed|supported by)/i.test(line);
+    })
+    .join("\n")
+    .replace(/\bconfirmed by retrieved scan evidence\b/gi, "not verified by retrieved scan evidence")
+    .replace(/\bgrounded\b/gi, "not verified")
+    .replace(/\bevidence-backed\b/gi, "not verified")
+    .trim();
+}
+
 export function enforceEvidencePolicy(content: string, context: ChatContextBundle): string {
   let trimmed = content.trim();
   const citedIds = Array.from(trimmed.matchAll(/\[(E\d+)\]/g)).map((match) => match[1]);
@@ -550,7 +564,8 @@ export function enforceEvidencePolicy(content: string, context: ChatContextBundl
   }
   if (context.evidence.length > 0 && (!hasCitation || !hasValidCitation) && !hasNoEvidence) {
     const citationIds = context.evidence.slice(0, 3).map((citation) => `[${citation.id}]`).join(" ");
-    trimmed = `${trimmed}\n\nConfidence: uncertain. Retrieved scan context exists, but this answer did not cite specific evidence, so treat architectural claims as ungrounded.`;
+    trimmed = neutralizeUnsupportedConfidence(trimmed);
+    trimmed = `${trimmed}\n\nConfidence: uncertain. Retrieved scan context exists, but this answer did not cite a valid evidence ID, so treat architectural claims as unverified.`;
     trimmed = `${trimmed}\n\nRetrieved context to inspect, not supporting proof for the answer: ${citationIds}.`;
     if (invalidCitedIds.length > 0) {
       trimmed = `${trimmed}\n\nInvalid citations ignored: ${invalidCitedIds.map((citationId) => `[${citationId}]`).join(" ")}.`;
@@ -558,11 +573,12 @@ export function enforceEvidencePolicy(content: string, context: ChatContextBundl
   } else if (context.evidence.length > 0 && invalidCitedIds.length > 0 && hasValidCitation && !hasNoEvidence) {
     const invalidList = invalidCitedIds.map((citationId) => `[${citationId}]`).join(" ");
     const validList = validCitedIds.map((citationId) => `[${citationId}]`).join(" ");
-    trimmed = `${trimmed}\n\nCitation warning: unknown citations ignored: ${invalidList}. Only known retrieved citations are grounded: ${validList}.`;
+    trimmed = neutralizeUnsupportedConfidence(trimmed);
+    trimmed = `${trimmed}\n\nCitation warning: unknown citations ignored: ${invalidList}. Only known retrieved citations are accepted as evidence: ${validList}.`;
     if (/\bconfidence\b/i.test(trimmed)) {
-      trimmed = `${trimmed}\n\nConfidence correction: partially grounded by known scan evidence only; unknown citations are not evidence.`;
+      trimmed = `${trimmed}\n\nConfidence correction: partially supported by known scan evidence only; unknown citations are not evidence.`;
     } else {
-      trimmed = `${trimmed}\n\nConfidence: partially grounded by known scan evidence only; unknown citations are not evidence.`;
+      trimmed = `${trimmed}\n\nConfidence: partially supported by known scan evidence only; unknown citations are not evidence.`;
     }
   } else if (context.weakEvidence && !/\b(inferred|uncertain|weak evidence)\b/i.test(trimmed)) {
     trimmed = `${trimmed}\n\nConfidence: inferred from limited evidence.`;

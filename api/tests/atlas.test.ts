@@ -590,13 +590,13 @@ describe("handoff chat backend", () => {
 
     const answer = enforceEvidencePolicy("The database module is the safest first change.", context);
 
-    expect(answer).toContain("did not cite specific evidence");
+    expect(answer).toContain("did not cite a valid evidence ID");
     expect(answer).toContain("not supporting proof");
     expect(answer).not.toContain("Supporting evidence:");
     expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
   });
 
-  it("marks answers with only unknown citations as ungrounded", () => {
+  it("marks answers with only unknown citations as unverified", () => {
     const context = buildChatContext({
       repository,
       workspaceId: "test",
@@ -613,6 +613,27 @@ describe("handoff chat backend", () => {
     expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
   });
 
+  it("removes preexisting confirmed confidence when only unknown citations are present", () => {
+    const context = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "Is the database module safe?",
+      scanId: "scan_fixture",
+    });
+
+    const answer = enforceEvidencePolicy(
+      "The database module is safe. [E999]\n\nConfidence: confirmed by retrieved scan evidence.",
+      context,
+    );
+
+    expect(answer).toContain("Confidence: uncertain");
+    expect(answer).toContain("Invalid citations ignored: [E999]");
+    expect(answer).toContain("unverified");
+    expect(answer).not.toContain("confirmed by retrieved scan evidence");
+    expect(answer).not.toContain("grounded");
+    expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
+  });
+
   it("flags mixed valid and unknown citations without global confirmed confidence", () => {
     const context = buildChatContext({
       repository,
@@ -625,8 +646,8 @@ describe("handoff chat backend", () => {
 
     expect(answer).toContain("Citation warning");
     expect(answer).toContain("unknown citations ignored: [E999]");
-    expect(answer).toContain("Only known retrieved citations are grounded: [E1]");
-    expect(answer).toContain("partially grounded by known scan evidence only");
+    expect(answer).toContain("Only known retrieved citations are accepted as evidence: [E1]");
+    expect(answer).toContain("partially supported by known scan evidence only");
     expect(answer).not.toContain("confirmed by retrieved scan evidence");
     expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
   });
