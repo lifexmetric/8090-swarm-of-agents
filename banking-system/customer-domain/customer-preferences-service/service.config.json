@@ -1,0 +1,30 @@
+{
+  "name": "customer-preferences-service",
+  "title": "Customer Preferences Service",
+  "domain": "Customer And CRM",
+  "port": 8124,
+  "endpoint": "/v1/customers/preferences",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "notification-service",
+      "url": "http://notification-service:8006",
+      "env": "NOTIFICATION_SERVICE_URL"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "customer.preference.updated"
+  ],
+  "topicsConsumed": [
+    "consent.revoked"
+  ],
+  "dataStores": [
+    "mongodb://mongodb:27017/customers_db",
+    "redis://redis:6379"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "document-verification-service",
+  "title": "Document Verification Service",
+  "domain": "Customer And CRM",
+  "port": 8122,
+  "endpoint": "/v1/documents/verification",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    },
+    {
+      "name": "secrets-broker-service",
+      "env": "SECRETS_BROKER_SERVICE_URL",
+      "url": "http://secrets-broker-service:8173"
+    }
+  ],
+  "topicsProduced": [
+    "document.verification.completed"
+  ],
+  "topicsConsumed": [
+    "kyc.customer.started"
+  ],
+  "dataStores": [
+    "mongodb://mongodb:27017/customers_db",
+    "redis://redis:6379"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "web-banking-service",
+  "title": "Web Banking Service",
+  "domain": "Channels",
+  "port": 8102,
+  "endpoint": "/v1/web/sessions",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "api-management-service",
+      "env": "API_MANAGEMENT_SERVICE_URL",
+      "url": "http://api-management-service:8170"
+    },
+    {
+      "name": "iam-service",
+      "env": "IAM_SERVICE_URL",
+      "url": "http://iam-service:8110"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    },
+    {
+      "name": "payments-service",
+      "url": "http://payments-service:8003",
+      "env": "PAYMENTS_SERVICE_URL"
+    }
+  ],
+  "topicsProduced": [
+    "channel.web.login"
+  ],
+  "topicsConsumed": [
+    "customer.preference.updated"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "branch-teller-service",
+  "title": "Branch Teller Service",
+  "domain": "Channels",
+  "port": 8104,
+  "endpoint": "/v1/branch/transactions",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "employee-access-service",
+      "env": "EMPLOYEE_ACCESS_SERVICE_URL",
+      "url": "http://employee-access-service:8114"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    },
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    }
+  ],
+  "topicsProduced": [
+    "branch.transaction.created"
+  ],
+  "topicsConsumed": [
+    "aml.case.opened"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

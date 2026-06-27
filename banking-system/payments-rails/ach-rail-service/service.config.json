@@ -1,0 +1,35 @@
+{
+  "name": "ach-rail-service",
+  "title": "Ach Rail Service",
+  "domain": "Payments And Rails",
+  "port": 8140,
+  "endpoint": "/v1/rails/ach/transfers",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "aml-screening-service",
+      "env": "AML_SCREENING_SERVICE_URL",
+      "url": "http://aml-screening-service:8150"
+    },
+    {
+      "name": "settlement-service",
+      "env": "SETTLEMENT_SERVICE_URL",
+      "url": "http://settlement-service:8144"
+    }
+  ],
+  "topicsProduced": [
+    "ach.transfer.submitted"
+  ],
+  "topicsConsumed": [
+    "payment.authorized"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

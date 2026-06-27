@@ -1,0 +1,32 @@
+{
+  "name": "settlement-service",
+  "title": "Settlement Service",
+  "domain": "Payments And Rails",
+  "port": 8144,
+  "endpoint": "/v1/settlement/batches",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "reconciliation-service",
+      "env": "RECONCILIATION_SERVICE_URL",
+      "url": "http://reconciliation-service:8145"
+    }
+  ],
+  "topicsProduced": [
+    "settlement.batch.created"
+  ],
+  "topicsConsumed": [
+    "ach.transfer.submitted",
+    "sepa.transfer.submitted",
+    "rtp.transfer.submitted"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

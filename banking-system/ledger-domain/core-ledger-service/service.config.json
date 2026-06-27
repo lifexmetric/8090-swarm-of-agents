@@ -1,0 +1,31 @@
+{
+  "name": "core-ledger-service",
+  "title": "Core Ledger Service",
+  "domain": "Accounts And Ledger",
+  "port": 8130,
+  "endpoint": "/v1/ledger/entries",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    },
+    {
+      "name": "config-service",
+      "env": "CONFIG_SERVICE_URL",
+      "url": "http://config-service:8172"
+    }
+  ],
+  "topicsProduced": [
+    "ledger.entry.posted"
+  ],
+  "topicsConsumed": [
+    "payment.authorized",
+    "branch.transaction.created"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "data-lake-ingestion-service",
+  "title": "Data Lake Ingestion Service",
+  "domain": "Data And Analytics",
+  "port": 8160,
+  "endpoint": "/v1/data-lake/ingest",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    },
+    {
+      "name": "secrets-broker-service",
+      "env": "SECRETS_BROKER_SERVICE_URL",
+      "url": "http://secrets-broker-service:8173"
+    }
+  ],
+  "topicsProduced": [
+    "data.lake.object.created"
+  ],
+  "topicsConsumed": [
+    "ledger.entry.posted",
+    "customer.profile.updated",
+    "payment.authorized"
+  ],
+  "dataStores": [
+    "s3://global-bank-data-lake-demo",
+    "postgres://bank_user@postgres-bank:5432/bank_db"
+  ]
+}

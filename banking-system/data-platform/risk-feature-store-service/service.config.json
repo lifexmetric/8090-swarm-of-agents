@@ -1,0 +1,25 @@
+{
+  "name": "risk-feature-store-service",
+  "title": "Risk Feature Store Service",
+  "domain": "Data And Analytics",
+  "port": 8162,
+  "endpoint": "/v1/features/risk",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "event-warehouse-service",
+      "env": "EVENT_WAREHOUSE_SERVICE_URL",
+      "url": "http://event-warehouse-service:8161"
+    }
+  ],
+  "topicsProduced": [
+    "risk.features.updated"
+  ],
+  "topicsConsumed": [
+    "warehouse.fact.loaded"
+  ],
+  "dataStores": [
+    "s3://global-bank-data-lake-demo",
+    "postgres://bank_user@postgres-bank:5432/bank_db"
+  ]
+}

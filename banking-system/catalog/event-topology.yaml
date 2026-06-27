@@ -1,0 +1,395 @@
+# Kafka/PubSub topic topology for the runnable fake global bank.
+topics:
+  - name: ach.transfer.submitted
+    retention: 7d
+    partitions: 12
+    producers:
+      - ach-rail-service
+    consumers:
+      - settlement-service
+  - name: aml.case.opened
+    retention: 7d
+    partitions: 12
+    producers:
+      - aml-screening-service
+    consumers:
+      - branch-teller-service
+      - case-management-service
+  - name: aml.screening.completed
+    retention: 7d
+    partitions: 12
+    producers:
+      - aml-screening-service
+    consumers:
+  - name: api.route.changed
+    retention: 7d
+    partitions: 12
+    producers:
+      - api-management-service
+    consumers:
+      - service-mesh-control-service
+  - name: atm.withdrawal.requested
+    retention: 7d
+    partitions: 12
+    producers:
+      - atm-gateway-service
+    consumers:
+      - card-authorization-service
+  - name: audit.event.recorded
+    retention: 7d
+    partitions: 12
+    producers:
+      - audit-log-service
+    consumers:
+  - name: branch.transaction.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - branch-teller-service
+    consumers:
+      - core-ledger-service
+  - name: card.account.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - card-account-service
+    consumers:
+  - name: card.authorization.approved
+    retention: 7d
+    partitions: 12
+    producers:
+      - card-authorization-service
+    consumers:
+      - fraud-rules-service
+  - name: case.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - case-management-service
+    consumers:
+      - audit-log-service
+  - name: case.resolved
+    retention: 7d
+    partitions: 12
+    producers:
+      - case-management-service
+    consumers:
+      - regulatory-reporting-service
+  - name: channel.mobile.login
+    retention: 7d
+    partitions: 12
+    producers:
+      - mobile-banking-service
+    consumers:
+      - device-trust-service
+  - name: channel.web.login
+    retention: 7d
+    partitions: 12
+    producers:
+      - web-banking-service
+    consumers:
+      - device-trust-service
+  - name: config.policy.updated
+    retention: 7d
+    partitions: 12
+    producers:
+      - config-service
+    consumers:
+      - employee-access-service
+      - api-management-service
+      - secrets-broker-service
+  - name: consent.granted
+    retention: 7d
+    partitions: 12
+    producers:
+      - consent-service
+    consumers:
+  - name: consent.revoked
+    retention: 7d
+    partitions: 12
+    producers:
+      - consent-service
+    consumers:
+      - partner-api-service
+      - customer-preferences-service
+  - name: customer.preference.updated
+    retention: 7d
+    partitions: 12
+    producers:
+      - customer-preferences-service
+    consumers:
+      - web-banking-service
+  - name: customer.profile.updated
+    retention: 7d
+    partitions: 12
+    producers:
+      - customer-profile-service
+    consumers:
+      - kyc-orchestration-service
+      - consent-service
+      - data-lake-ingestion-service
+  - name: data.lake.object.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - data-lake-ingestion-service
+    consumers:
+      - event-warehouse-service
+  - name: deposit.account.opened
+    retention: 7d
+    partitions: 12
+    producers:
+      - deposits-service
+    consumers:
+      - savings-service
+  - name: device.trust.scored
+    retention: 7d
+    partitions: 12
+    producers:
+      - device-trust-service
+    consumers:
+  - name: document.verification.completed
+    retention: 7d
+    partitions: 12
+    producers:
+      - document-verification-service
+    consumers:
+      - mortgage-service
+  - name: employee.access.granted
+    retention: 7d
+    partitions: 12
+    producers:
+      - employee-access-service
+    consumers:
+      - config-service
+  - name: employee.access.revoked
+    retention: 7d
+    partitions: 12
+    producers:
+      - employee-access-service
+    consumers:
+      - iam-service
+  - name: fraud.alert
+    retention: 7d
+    partitions: 12
+    producers:
+      - fraud-rules-service
+    consumers:
+      - mobile-banking-service
+      - case-management-service
+  - name: identity.login.failed
+    retention: 7d
+    partitions: 12
+    producers:
+      - iam-service
+    consumers:
+      - mfa-service
+  - name: identity.login.succeeded
+    retention: 7d
+    partitions: 12
+    producers:
+      - iam-service
+    consumers:
+      - session-risk-service
+      - audit-log-service
+  - name: kyc.customer.started
+    retention: 7d
+    partitions: 12
+    producers:
+      - kyc-orchestration-service
+    consumers:
+      - document-verification-service
+      - aml-screening-service
+      - sanctions-screening-service
+  - name: kyc.customer.verified
+    retention: 7d
+    partitions: 12
+    producers:
+      - kyc-orchestration-service
+    consumers:
+      - customer-profile-service
+      - deposits-service
+      - card-account-service
+  - name: ledger.entry.posted
+    retention: 7d
+    partitions: 12
+    producers:
+      - core-ledger-service
+    consumers:
+      - atm-gateway-service
+      - loan-servicing-service
+      - reconciliation-service
+      - transaction-monitoring-service
+      - data-lake-ingestion-service
+      - audit-log-service
+  - name: loan.payment.due
+    retention: 7d
+    partitions: 12
+    producers:
+      - loan-servicing-service
+    consumers:
+  - name: mesh.route.changed
+    retention: 7d
+    partitions: 12
+    producers:
+      - service-mesh-control-service
+    consumers:
+      - observability-collector-service
+  - name: mfa.challenge.sent
+    retention: 7d
+    partitions: 12
+    producers:
+      - mfa-service
+    consumers:
+  - name: mfa.challenge.verified
+    retention: 7d
+    partitions: 12
+    producers:
+      - mfa-service
+    consumers:
+  - name: mortgage.application.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - mortgage-service
+    consumers:
+  - name: observability.signal.received
+    retention: 7d
+    partitions: 12
+    producers:
+      - observability-collector-service
+    consumers:
+  - name: partner.request.received
+    retention: 7d
+    partitions: 12
+    producers:
+      - partner-api-service
+    consumers:
+      - americas-routing-service
+      - emea-routing-service
+      - apac-routing-service
+  - name: payment.authorized
+    retention: 7d
+    partitions: 12
+    producers:
+      - card-authorization-service
+    consumers:
+      - core-ledger-service
+      - ach-rail-service
+      - sepa-rail-service
+      - rtp-rail-service
+      - aml-screening-service
+      - sanctions-screening-service
+      - transaction-monitoring-service
+      - data-lake-ingestion-service
+  - name: reconciliation.completed
+    retention: 7d
+    partitions: 12
+    producers:
+      - reconciliation-service
+    consumers:
+      - regulatory-reporting-service
+  - name: region.americas.routed
+    retention: 7d
+    partitions: 12
+    producers:
+      - americas-routing-service
+    consumers:
+  - name: region.apac.routed
+    retention: 7d
+    partitions: 12
+    producers:
+      - apac-routing-service
+    consumers:
+  - name: region.emea.routed
+    retention: 7d
+    partitions: 12
+    producers:
+      - emea-routing-service
+    consumers:
+  - name: regulatory.report.filed
+    retention: 7d
+    partitions: 12
+    producers:
+      - regulatory-reporting-service
+    consumers:
+      - reporting-marts-service
+  - name: reporting.mart.refreshed
+    retention: 7d
+    partitions: 12
+    producers:
+      - reporting-marts-service
+    consumers:
+  - name: risk.features.updated
+    retention: 7d
+    partitions: 12
+    producers:
+      - risk-feature-store-service
+    consumers:
+  - name: rtp.transfer.submitted
+    retention: 7d
+    partitions: 12
+    producers:
+      - rtp-rail-service
+    consumers:
+      - settlement-service
+  - name: sanctions.hit.detected
+    retention: 7d
+    partitions: 12
+    producers:
+      - sanctions-screening-service
+    consumers:
+      - case-management-service
+  - name: sanctions.screening.completed
+    retention: 7d
+    partitions: 12
+    producers:
+      - sanctions-screening-service
+    consumers:
+  - name: savings.account.opened
+    retention: 7d
+    partitions: 12
+    producers:
+      - savings-service
+    consumers:
+  - name: secret.lease.issued
+    retention: 7d
+    partitions: 12
+    producers:
+      - secrets-broker-service
+    consumers:
+  - name: sepa.transfer.submitted
+    retention: 7d
+    partitions: 12
+    producers:
+      - sepa-rail-service
+    consumers:
+      - settlement-service
+  - name: session.risk.scored
+    retention: 7d
+    partitions: 12
+    producers:
+      - session-risk-service
+    consumers:
+      - fraud-rules-service
+  - name: settlement.batch.created
+    retention: 7d
+    partitions: 12
+    producers:
+      - settlement-service
+    consumers:
+      - reconciliation-service
+  - name: transaction.monitoring.alert
+    retention: 7d
+    partitions: 12
+    producers:
+      - transaction-monitoring-service
+    consumers:
+  - name: warehouse.fact.loaded
+    retention: 7d
+    partitions: 12
+    producers:
+      - event-warehouse-service
+    consumers:
+      - risk-feature-store-service
+      - reporting-marts-service

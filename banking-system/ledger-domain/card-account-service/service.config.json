@@ -1,0 +1,35 @@
+{
+  "name": "card-account-service",
+  "title": "Card Account Service",
+  "domain": "Accounts And Ledger",
+  "port": 8133,
+  "endpoint": "/v1/cards/accounts",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    },
+    {
+      "name": "card-authorization-service",
+      "env": "CARD_AUTHORIZATION_SERVICE_URL",
+      "url": "http://card-authorization-service:8143"
+    }
+  ],
+  "topicsProduced": [
+    "card.account.created"
+  ],
+  "topicsConsumed": [
+    "kyc.customer.verified"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

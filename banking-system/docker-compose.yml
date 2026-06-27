@@ -297,3 +297,1610 @@ services:
       - reporting-service
     networks:
       - banking-net
+
+  # ── Global Bank Profile Services ───────────────────────────────────────────
+
+  mobile-banking-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: channels/mobile-banking-service/Dockerfile
+    container_name: mobile-banking-service
+    ports:
+      - "8101:8101"
+    environment:
+      PORT: "8101"
+      SERVICE_NAME: "mobile-banking-service"
+      SERVICE_DOMAIN: "Channels"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      API_MANAGEMENT_SERVICE_URL: "http://api-management-service:8170"
+      IAM_SERVICE_URL: "http://iam-service:8110"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      ACCOUNTS_SERVICE_URL: "http://accounts-service:8002"
+      KAFKA_TOPIC_CHANNEL_MOBILE_LOGIN: "channel.mobile.login"
+      KAFKA_TOPIC_FRAUD_ALERT: "fraud.alert"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8101/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web-banking-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: channels/web-banking-service/Dockerfile
+    container_name: web-banking-service
+    ports:
+      - "8102:8102"
+    environment:
+      PORT: "8102"
+      SERVICE_NAME: "web-banking-service"
+      SERVICE_DOMAIN: "Channels"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      API_MANAGEMENT_SERVICE_URL: "http://api-management-service:8170"
+      IAM_SERVICE_URL: "http://iam-service:8110"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      PAYMENTS_SERVICE_URL: "http://payments-service:8003"
+      KAFKA_TOPIC_CHANNEL_WEB_LOGIN: "channel.web.login"
+      KAFKA_TOPIC_CUSTOMER_PREFERENCE_UPDATED: "customer.preference.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8102/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  atm-gateway-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: channels/atm-gateway-service/Dockerfile
+    container_name: atm-gateway-service
+    ports:
+      - "8103:8103"
+    environment:
+      PORT: "8103"
+      SERVICE_NAME: "atm-gateway-service"
+      SERVICE_DOMAIN: "Channels"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      CARD_AUTHORIZATION_SERVICE_URL: "http://card-authorization-service:8143"
+      SESSION_RISK_SERVICE_URL: "http://session-risk-service:8113"
+      KAFKA_TOPIC_ATM_WITHDRAWAL_REQUESTED: "atm.withdrawal.requested"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8103/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  branch-teller-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: channels/branch-teller-service/Dockerfile
+    container_name: branch-teller-service
+    ports:
+      - "8104:8104"
+    environment:
+      PORT: "8104"
+      SERVICE_NAME: "branch-teller-service"
+      SERVICE_DOMAIN: "Channels"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EMPLOYEE_ACCESS_SERVICE_URL: "http://employee-access-service:8114"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      KAFKA_TOPIC_BRANCH_TRANSACTION_CREATED: "branch.transaction.created"
+      KAFKA_TOPIC_AML_CASE_OPENED: "aml.case.opened"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8104/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  partner-api-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: channels/partner-api-service/Dockerfile
+    container_name: partner-api-service
+    ports:
+      - "8105:8105"
+    environment:
+      PORT: "8105"
+      SERVICE_NAME: "partner-api-service"
+      SERVICE_DOMAIN: "Channels"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      API_MANAGEMENT_SERVICE_URL: "http://api-management-service:8170"
+      CONSENT_SERVICE_URL: "http://consent-service:8123"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      KAFKA_TOPIC_PARTNER_REQUEST_RECEIVED: "partner.request.received"
+      KAFKA_TOPIC_CONSENT_REVOKED: "consent.revoked"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8105/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  iam-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: identity/iam-service/Dockerfile
+    container_name: iam-service
+    ports:
+      - "8110:8110"
+    environment:
+      PORT: "8110"
+      SERVICE_NAME: "iam-service"
+      SERVICE_DOMAIN: "Identity And Access"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      MFA_SERVICE_URL: "http://mfa-service:8111"
+      DEVICE_TRUST_SERVICE_URL: "http://device-trust-service:8112"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_IDENTITY_LOGIN_SUCCEEDED: "identity.login.succeeded"
+      KAFKA_TOPIC_IDENTITY_LOGIN_FAILED: "identity.login.failed"
+      KAFKA_TOPIC_EMPLOYEE_ACCESS_REVOKED: "employee.access.revoked"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8110/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mfa-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: identity/mfa-service/Dockerfile
+    container_name: mfa-service
+    ports:
+      - "8111:8111"
+    environment:
+      PORT: "8111"
+      SERVICE_NAME: "mfa-service"
+      SERVICE_DOMAIN: "Identity And Access"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8006"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_MFA_CHALLENGE_SENT: "mfa.challenge.sent"
+      KAFKA_TOPIC_MFA_CHALLENGE_VERIFIED: "mfa.challenge.verified"
+      KAFKA_TOPIC_IDENTITY_LOGIN_FAILED: "identity.login.failed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8111/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  device-trust-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: identity/device-trust-service/Dockerfile
+    container_name: device-trust-service
+    ports:
+      - "8112:8112"
+    environment:
+      PORT: "8112"
+      SERVICE_NAME: "device-trust-service"
+      SERVICE_DOMAIN: "Identity And Access"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      RISK_FEATURE_STORE_SERVICE_URL: "http://risk-feature-store-service:8162"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_DEVICE_TRUST_SCORED: "device.trust.scored"
+      KAFKA_TOPIC_CHANNEL_MOBILE_LOGIN: "channel.mobile.login"
+      KAFKA_TOPIC_CHANNEL_WEB_LOGIN: "channel.web.login"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8112/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  session-risk-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: identity/session-risk-service/Dockerfile
+    container_name: session-risk-service
+    ports:
+      - "8113:8113"
+    environment:
+      PORT: "8113"
+      SERVICE_NAME: "session-risk-service"
+      SERVICE_DOMAIN: "Identity And Access"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      DEVICE_TRUST_SERVICE_URL: "http://device-trust-service:8112"
+      FRAUD_RULES_SERVICE_URL: "http://fraud-rules-service:8153"
+      KAFKA_TOPIC_SESSION_RISK_SCORED: "session.risk.scored"
+      KAFKA_TOPIC_IDENTITY_LOGIN_SUCCEEDED: "identity.login.succeeded"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8113/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  employee-access-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: identity/employee-access-service/Dockerfile
+    container_name: employee-access-service
+    ports:
+      - "8114:8114"
+    environment:
+      PORT: "8114"
+      SERVICE_NAME: "employee-access-service"
+      SERVICE_DOMAIN: "Identity And Access"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      IAM_SERVICE_URL: "http://iam-service:8110"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_EMPLOYEE_ACCESS_GRANTED: "employee.access.granted"
+      KAFKA_TOPIC_EMPLOYEE_ACCESS_REVOKED: "employee.access.revoked"
+      KAFKA_TOPIC_CONFIG_POLICY_UPDATED: "config.policy.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8114/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  customer-profile-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: customer-domain/customer-profile-service/Dockerfile
+    container_name: customer-profile-service
+    ports:
+      - "8120:8120"
+    environment:
+      PORT: "8120"
+      SERVICE_NAME: "customer-profile-service"
+      SERVICE_DOMAIN: "Customer And CRM"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CONSENT_SERVICE_URL: "http://consent-service:8123"
+      CUSTOMER_PREFERENCES_SERVICE_URL: "http://customer-preferences-service:8124"
+      KAFKA_TOPIC_CUSTOMER_PROFILE_UPDATED: "customer.profile.updated"
+      KAFKA_TOPIC_KYC_CUSTOMER_VERIFIED: "kyc.customer.verified"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8120/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  kyc-orchestration-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: customer-domain/kyc-orchestration-service/Dockerfile
+    container_name: kyc-orchestration-service
+    ports:
+      - "8121:8121"
+    environment:
+      PORT: "8121"
+      SERVICE_NAME: "kyc-orchestration-service"
+      SERVICE_DOMAIN: "Customer And CRM"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      DOCUMENT_VERIFICATION_SERVICE_URL: "http://document-verification-service:8122"
+      AML_SCREENING_SERVICE_URL: "http://aml-screening-service:8150"
+      SANCTIONS_SCREENING_SERVICE_URL: "http://sanctions-screening-service:8151"
+      KAFKA_TOPIC_KYC_CUSTOMER_STARTED: "kyc.customer.started"
+      KAFKA_TOPIC_KYC_CUSTOMER_VERIFIED: "kyc.customer.verified"
+      KAFKA_TOPIC_CUSTOMER_PROFILE_UPDATED: "customer.profile.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8121/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  document-verification-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: customer-domain/document-verification-service/Dockerfile
+    container_name: document-verification-service
+    ports:
+      - "8122:8122"
+    environment:
+      PORT: "8122"
+      SERVICE_NAME: "document-verification-service"
+      SERVICE_DOMAIN: "Customer And CRM"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      SECRETS_BROKER_SERVICE_URL: "http://secrets-broker-service:8173"
+      KAFKA_TOPIC_DOCUMENT_VERIFICATION_COMPLETED: "document.verification.completed"
+      KAFKA_TOPIC_KYC_CUSTOMER_STARTED: "kyc.customer.started"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8122/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  consent-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: customer-domain/consent-service/Dockerfile
+    container_name: consent-service
+    ports:
+      - "8123:8123"
+    environment:
+      PORT: "8123"
+      SERVICE_NAME: "consent-service"
+      SERVICE_DOMAIN: "Customer And CRM"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_CONSENT_GRANTED: "consent.granted"
+      KAFKA_TOPIC_CONSENT_REVOKED: "consent.revoked"
+      KAFKA_TOPIC_CUSTOMER_PROFILE_UPDATED: "customer.profile.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  customer-preferences-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: customer-domain/customer-preferences-service/Dockerfile
+    container_name: customer-preferences-service
+    ports:
+      - "8124:8124"
+    environment:
+      PORT: "8124"
+      SERVICE_NAME: "customer-preferences-service"
+      SERVICE_DOMAIN: "Customer And CRM"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8006"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_CUSTOMER_PREFERENCE_UPDATED: "customer.preference.updated"
+      KAFKA_TOPIC_CONSENT_REVOKED: "consent.revoked"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8124/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  core-ledger-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/core-ledger-service/Dockerfile
+    container_name: core-ledger-service
+    ports:
+      - "8130:8130"
+    environment:
+      PORT: "8130"
+      SERVICE_NAME: "core-ledger-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      CONFIG_SERVICE_URL: "http://config-service:8172"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+      KAFKA_TOPIC_BRANCH_TRANSACTION_CREATED: "branch.transaction.created"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8130/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  deposits-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/deposits-service/Dockerfile
+    container_name: deposits-service
+    ports:
+      - "8131:8131"
+    environment:
+      PORT: "8131"
+      SERVICE_NAME: "deposits-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      KAFKA_TOPIC_DEPOSIT_ACCOUNT_OPENED: "deposit.account.opened"
+      KAFKA_TOPIC_KYC_CUSTOMER_VERIFIED: "kyc.customer.verified"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8131/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  savings-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/savings-service/Dockerfile
+    container_name: savings-service
+    ports:
+      - "8132:8132"
+    environment:
+      PORT: "8132"
+      SERVICE_NAME: "savings-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      KAFKA_TOPIC_SAVINGS_ACCOUNT_OPENED: "savings.account.opened"
+      KAFKA_TOPIC_DEPOSIT_ACCOUNT_OPENED: "deposit.account.opened"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8132/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  card-account-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/card-account-service/Dockerfile
+    container_name: card-account-service
+    ports:
+      - "8133:8133"
+    environment:
+      PORT: "8133"
+      SERVICE_NAME: "card-account-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      CARD_AUTHORIZATION_SERVICE_URL: "http://card-authorization-service:8143"
+      KAFKA_TOPIC_CARD_ACCOUNT_CREATED: "card.account.created"
+      KAFKA_TOPIC_KYC_CUSTOMER_VERIFIED: "kyc.customer.verified"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8133/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  loan-servicing-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/loan-servicing-service/Dockerfile
+    container_name: loan-servicing-service
+    ports:
+      - "8134:8134"
+    environment:
+      PORT: "8134"
+      SERVICE_NAME: "loan-servicing-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      RISK_FEATURE_STORE_SERVICE_URL: "http://risk-feature-store-service:8162"
+      KAFKA_TOPIC_LOAN_PAYMENT_DUE: "loan.payment.due"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8134/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mortgage-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: ledger-domain/mortgage-service/Dockerfile
+    container_name: mortgage-service
+    ports:
+      - "8135:8135"
+    environment:
+      PORT: "8135"
+      SERVICE_NAME: "mortgage-service"
+      SERVICE_DOMAIN: "Accounts And Ledger"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CUSTOMER_PROFILE_SERVICE_URL: "http://customer-profile-service:8120"
+      RISK_FEATURE_STORE_SERVICE_URL: "http://risk-feature-store-service:8162"
+      DOCUMENT_VERIFICATION_SERVICE_URL: "http://document-verification-service:8122"
+      KAFKA_TOPIC_MORTGAGE_APPLICATION_CREATED: "mortgage.application.created"
+      KAFKA_TOPIC_DOCUMENT_VERIFICATION_COMPLETED: "document.verification.completed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8135/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ach-rail-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/ach-rail-service/Dockerfile
+    container_name: ach-rail-service
+    ports:
+      - "8140:8140"
+    environment:
+      PORT: "8140"
+      SERVICE_NAME: "ach-rail-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      AML_SCREENING_SERVICE_URL: "http://aml-screening-service:8150"
+      SETTLEMENT_SERVICE_URL: "http://settlement-service:8144"
+      KAFKA_TOPIC_ACH_TRANSFER_SUBMITTED: "ach.transfer.submitted"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8140/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  sepa-rail-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/sepa-rail-service/Dockerfile
+    container_name: sepa-rail-service
+    ports:
+      - "8141:8141"
+    environment:
+      PORT: "8141"
+      SERVICE_NAME: "sepa-rail-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      SANCTIONS_SCREENING_SERVICE_URL: "http://sanctions-screening-service:8151"
+      SETTLEMENT_SERVICE_URL: "http://settlement-service:8144"
+      KAFKA_TOPIC_SEPA_TRANSFER_SUBMITTED: "sepa.transfer.submitted"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8141/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  rtp-rail-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/rtp-rail-service/Dockerfile
+    container_name: rtp-rail-service
+    ports:
+      - "8142:8142"
+    environment:
+      PORT: "8142"
+      SERVICE_NAME: "rtp-rail-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      FRAUD_RULES_SERVICE_URL: "http://fraud-rules-service:8153"
+      SETTLEMENT_SERVICE_URL: "http://settlement-service:8144"
+      KAFKA_TOPIC_RTP_TRANSFER_SUBMITTED: "rtp.transfer.submitted"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8142/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  card-authorization-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/card-authorization-service/Dockerfile
+    container_name: card-authorization-service
+    ports:
+      - "8143:8143"
+    environment:
+      PORT: "8143"
+      SERVICE_NAME: "card-authorization-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      FRAUD_RULES_SERVICE_URL: "http://fraud-rules-service:8153"
+      SESSION_RISK_SERVICE_URL: "http://session-risk-service:8113"
+      KAFKA_TOPIC_CARD_AUTHORIZATION_APPROVED: "card.authorization.approved"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+      KAFKA_TOPIC_ATM_WITHDRAWAL_REQUESTED: "atm.withdrawal.requested"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8143/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  settlement-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/settlement-service/Dockerfile
+    container_name: settlement-service
+    ports:
+      - "8144:8144"
+    environment:
+      PORT: "8144"
+      SERVICE_NAME: "settlement-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CORE_LEDGER_SERVICE_URL: "http://core-ledger-service:8130"
+      RECONCILIATION_SERVICE_URL: "http://reconciliation-service:8145"
+      KAFKA_TOPIC_SETTLEMENT_BATCH_CREATED: "settlement.batch.created"
+      KAFKA_TOPIC_ACH_TRANSFER_SUBMITTED: "ach.transfer.submitted"
+      KAFKA_TOPIC_SEPA_TRANSFER_SUBMITTED: "sepa.transfer.submitted"
+      KAFKA_TOPIC_RTP_TRANSFER_SUBMITTED: "rtp.transfer.submitted"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8144/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  reconciliation-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: payments-rails/reconciliation-service/Dockerfile
+    container_name: reconciliation-service
+    ports:
+      - "8145:8145"
+    environment:
+      PORT: "8145"
+      SERVICE_NAME: "reconciliation-service"
+      SERVICE_DOMAIN: "Payments And Rails"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EVENT_WAREHOUSE_SERVICE_URL: "http://event-warehouse-service:8161"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_RECONCILIATION_COMPLETED: "reconciliation.completed"
+      KAFKA_TOPIC_SETTLEMENT_BATCH_CREATED: "settlement.batch.created"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8145/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  aml-screening-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/aml-screening-service/Dockerfile
+    container_name: aml-screening-service
+    ports:
+      - "8150:8150"
+    environment:
+      PORT: "8150"
+      SERVICE_NAME: "aml-screening-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      TRANSACTION_MONITORING_SERVICE_URL: "http://transaction-monitoring-service:8152"
+      CASE_MANAGEMENT_SERVICE_URL: "http://case-management-service:8154"
+      KAFKA_TOPIC_AML_SCREENING_COMPLETED: "aml.screening.completed"
+      KAFKA_TOPIC_AML_CASE_OPENED: "aml.case.opened"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+      KAFKA_TOPIC_KYC_CUSTOMER_STARTED: "kyc.customer.started"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8150/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  sanctions-screening-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/sanctions-screening-service/Dockerfile
+    container_name: sanctions-screening-service
+    ports:
+      - "8151:8151"
+    environment:
+      PORT: "8151"
+      SERVICE_NAME: "sanctions-screening-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CASE_MANAGEMENT_SERVICE_URL: "http://case-management-service:8154"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_SANCTIONS_SCREENING_COMPLETED: "sanctions.screening.completed"
+      KAFKA_TOPIC_SANCTIONS_HIT_DETECTED: "sanctions.hit.detected"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+      KAFKA_TOPIC_KYC_CUSTOMER_STARTED: "kyc.customer.started"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8151/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  transaction-monitoring-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/transaction-monitoring-service/Dockerfile
+    container_name: transaction-monitoring-service
+    ports:
+      - "8152:8152"
+    environment:
+      PORT: "8152"
+      SERVICE_NAME: "transaction-monitoring-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      RISK_FEATURE_STORE_SERVICE_URL: "http://risk-feature-store-service:8162"
+      CASE_MANAGEMENT_SERVICE_URL: "http://case-management-service:8154"
+      KAFKA_TOPIC_TRANSACTION_MONITORING_ALERT: "transaction.monitoring.alert"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8152/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  fraud-rules-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/fraud-rules-service/Dockerfile
+    container_name: fraud-rules-service
+    ports:
+      - "8153:8153"
+    environment:
+      PORT: "8153"
+      SERVICE_NAME: "fraud-rules-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      RISK_FEATURE_STORE_SERVICE_URL: "http://risk-feature-store-service:8162"
+      CASE_MANAGEMENT_SERVICE_URL: "http://case-management-service:8154"
+      KAFKA_TOPIC_FRAUD_ALERT: "fraud.alert"
+      KAFKA_TOPIC_SESSION_RISK_SCORED: "session.risk.scored"
+      KAFKA_TOPIC_CARD_AUTHORIZATION_APPROVED: "card.authorization.approved"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8153/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  case-management-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/case-management-service/Dockerfile
+    container_name: case-management-service
+    ports:
+      - "8154:8154"
+    environment:
+      PORT: "8154"
+      SERVICE_NAME: "case-management-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EMPLOYEE_ACCESS_SERVICE_URL: "http://employee-access-service:8114"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8006"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_CASE_CREATED: "case.created"
+      KAFKA_TOPIC_CASE_RESOLVED: "case.resolved"
+      KAFKA_TOPIC_AML_CASE_OPENED: "aml.case.opened"
+      KAFKA_TOPIC_SANCTIONS_HIT_DETECTED: "sanctions.hit.detected"
+      KAFKA_TOPIC_FRAUD_ALERT: "fraud.alert"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8154/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  regulatory-reporting-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: risk-compliance/regulatory-reporting-service/Dockerfile
+    container_name: regulatory-reporting-service
+    ports:
+      - "8155:8155"
+    environment:
+      PORT: "8155"
+      SERVICE_NAME: "regulatory-reporting-service"
+      SERVICE_DOMAIN: "Risk And Compliance"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      REPORTING_MARTS_SERVICE_URL: "http://reporting-marts-service:8163"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_REGULATORY_REPORT_FILED: "regulatory.report.filed"
+      KAFKA_TOPIC_CASE_RESOLVED: "case.resolved"
+      KAFKA_TOPIC_RECONCILIATION_COMPLETED: "reconciliation.completed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8155/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  data-lake-ingestion-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: data-platform/data-lake-ingestion-service/Dockerfile
+    container_name: data-lake-ingestion-service
+    ports:
+      - "8160:8160"
+    environment:
+      PORT: "8160"
+      SERVICE_NAME: "data-lake-ingestion-service"
+      SERVICE_DOMAIN: "Data And Analytics"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      SECRETS_BROKER_SERVICE_URL: "http://secrets-broker-service:8173"
+      KAFKA_TOPIC_DATA_LAKE_OBJECT_CREATED: "data.lake.object.created"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+      KAFKA_TOPIC_CUSTOMER_PROFILE_UPDATED: "customer.profile.updated"
+      KAFKA_TOPIC_PAYMENT_AUTHORIZED: "payment.authorized"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8160/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  event-warehouse-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: data-platform/event-warehouse-service/Dockerfile
+    container_name: event-warehouse-service
+    ports:
+      - "8161:8161"
+    environment:
+      PORT: "8161"
+      SERVICE_NAME: "event-warehouse-service"
+      SERVICE_DOMAIN: "Data And Analytics"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      DATA_LAKE_INGESTION_SERVICE_URL: "http://data-lake-ingestion-service:8160"
+      KAFKA_TOPIC_WAREHOUSE_FACT_LOADED: "warehouse.fact.loaded"
+      KAFKA_TOPIC_DATA_LAKE_OBJECT_CREATED: "data.lake.object.created"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8161/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  risk-feature-store-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: data-platform/risk-feature-store-service/Dockerfile
+    container_name: risk-feature-store-service
+    ports:
+      - "8162:8162"
+    environment:
+      PORT: "8162"
+      SERVICE_NAME: "risk-feature-store-service"
+      SERVICE_DOMAIN: "Data And Analytics"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EVENT_WAREHOUSE_SERVICE_URL: "http://event-warehouse-service:8161"
+      KAFKA_TOPIC_RISK_FEATURES_UPDATED: "risk.features.updated"
+      KAFKA_TOPIC_WAREHOUSE_FACT_LOADED: "warehouse.fact.loaded"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8162/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  reporting-marts-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: data-platform/reporting-marts-service/Dockerfile
+    container_name: reporting-marts-service
+    ports:
+      - "8163:8163"
+    environment:
+      PORT: "8163"
+      SERVICE_NAME: "reporting-marts-service"
+      SERVICE_DOMAIN: "Data And Analytics"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EVENT_WAREHOUSE_SERVICE_URL: "http://event-warehouse-service:8161"
+      REGULATORY_REPORTING_SERVICE_URL: "http://regulatory-reporting-service:8155"
+      KAFKA_TOPIC_REPORTING_MART_REFRESHED: "reporting.mart.refreshed"
+      KAFKA_TOPIC_WAREHOUSE_FACT_LOADED: "warehouse.fact.loaded"
+      KAFKA_TOPIC_REGULATORY_REPORT_FILED: "regulatory.report.filed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8163/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api-management-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/api-management-service/Dockerfile
+    container_name: api-management-service
+    ports:
+      - "8170:8170"
+    environment:
+      PORT: "8170"
+      SERVICE_NAME: "api-management-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CONFIG_SERVICE_URL: "http://config-service:8172"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_API_ROUTE_CHANGED: "api.route.changed"
+      KAFKA_TOPIC_CONFIG_POLICY_UPDATED: "config.policy.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8170/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  service-mesh-control-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/service-mesh-control-service/Dockerfile
+    container_name: service-mesh-control-service
+    ports:
+      - "8171:8171"
+    environment:
+      PORT: "8171"
+      SERVICE_NAME: "service-mesh-control-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      CONFIG_SERVICE_URL: "http://config-service:8172"
+      OBSERVABILITY_COLLECTOR_SERVICE_URL: "http://observability-collector-service:8175"
+      KAFKA_TOPIC_MESH_ROUTE_CHANGED: "mesh.route.changed"
+      KAFKA_TOPIC_API_ROUTE_CHANGED: "api.route.changed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8171/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  config-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/config-service/Dockerfile
+    container_name: config-service
+    ports:
+      - "8172:8172"
+    environment:
+      PORT: "8172"
+      SERVICE_NAME: "config-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      SECRETS_BROKER_SERVICE_URL: "http://secrets-broker-service:8173"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_CONFIG_POLICY_UPDATED: "config.policy.updated"
+      KAFKA_TOPIC_EMPLOYEE_ACCESS_GRANTED: "employee.access.granted"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8172/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  secrets-broker-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/secrets-broker-service/Dockerfile
+    container_name: secrets-broker-service
+    ports:
+      - "8173:8173"
+    environment:
+      PORT: "8173"
+      SERVICE_NAME: "secrets-broker-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      AUDIT_LOG_SERVICE_URL: "http://audit-log-service:8174"
+      KAFKA_TOPIC_SECRET_LEASE_ISSUED: "secret.lease.issued"
+      KAFKA_TOPIC_CONFIG_POLICY_UPDATED: "config.policy.updated"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8173/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  audit-log-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/audit-log-service/Dockerfile
+    container_name: audit-log-service
+    ports:
+      - "8174:8174"
+    environment:
+      PORT: "8174"
+      SERVICE_NAME: "audit-log-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EVENT_WAREHOUSE_SERVICE_URL: "http://event-warehouse-service:8161"
+      KAFKA_TOPIC_AUDIT_EVENT_RECORDED: "audit.event.recorded"
+      KAFKA_TOPIC_IDENTITY_LOGIN_SUCCEEDED: "identity.login.succeeded"
+      KAFKA_TOPIC_LEDGER_ENTRY_POSTED: "ledger.entry.posted"
+      KAFKA_TOPIC_CASE_CREATED: "case.created"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8174/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  observability-collector-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: platform-services/observability-collector-service/Dockerfile
+    container_name: observability-collector-service
+    ports:
+      - "8175:8175"
+    environment:
+      PORT: "8175"
+      SERVICE_NAME: "observability-collector-service"
+      SERVICE_DOMAIN: "Platform Services"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      EVENT_WAREHOUSE_SERVICE_URL: "http://event-warehouse-service:8161"
+      KAFKA_TOPIC_OBSERVABILITY_SIGNAL_RECEIVED: "observability.signal.received"
+      KAFKA_TOPIC_MESH_ROUTE_CHANGED: "mesh.route.changed"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8175/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  americas-routing-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: regions/americas-routing-service/Dockerfile
+    container_name: americas-routing-service
+    ports:
+      - "8180:8180"
+    environment:
+      PORT: "8180"
+      SERVICE_NAME: "americas-routing-service"
+      SERVICE_DOMAIN: "Regionalization"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      ACH_RAIL_SERVICE_URL: "http://ach-rail-service:8140"
+      RTP_RAIL_SERVICE_URL: "http://rtp-rail-service:8142"
+      CARD_AUTHORIZATION_SERVICE_URL: "http://card-authorization-service:8143"
+      KAFKA_TOPIC_REGION_AMERICAS_ROUTED: "region.americas.routed"
+      KAFKA_TOPIC_PARTNER_REQUEST_RECEIVED: "partner.request.received"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8180/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  emea-routing-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: regions/emea-routing-service/Dockerfile
+    container_name: emea-routing-service
+    ports:
+      - "8181:8181"
+    environment:
+      PORT: "8181"
+      SERVICE_NAME: "emea-routing-service"
+      SERVICE_DOMAIN: "Regionalization"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      SEPA_RAIL_SERVICE_URL: "http://sepa-rail-service:8141"
+      SANCTIONS_SCREENING_SERVICE_URL: "http://sanctions-screening-service:8151"
+      SWIFT_RAIL_URL: "http://mock-swift-rail:9999"
+      KAFKA_TOPIC_REGION_EMEA_ROUTED: "region.emea.routed"
+      KAFKA_TOPIC_PARTNER_REQUEST_RECEIVED: "partner.request.received"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8181/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  apac-routing-service:
+    profiles: ["global"]
+    build:
+      context: .
+      dockerfile: regions/apac-routing-service/Dockerfile
+    container_name: apac-routing-service
+    ports:
+      - "8182:8182"
+    environment:
+      PORT: "8182"
+      SERVICE_NAME: "apac-routing-service"
+      SERVICE_DOMAIN: "Regionalization"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      REDIS_URL: "redis://redis:6379"
+      POSTGRES_BANK_HOST: "postgres-bank"
+      MONGODB_URI: "mongodb://mongo_user:mongo_password@mongodb:27017/customers_db?authSource=admin"
+      NEO4J_URI: "bolt://neo4j:7687"
+      SWIFT_RAIL_URL: "http://mock-swift-rail:9999"
+      SANCTIONS_SCREENING_SERVICE_URL: "http://sanctions-screening-service:8151"
+      RTP_RAIL_SERVICE_URL: "http://rtp-rail-service:8142"
+      KAFKA_TOPIC_REGION_APAC_ROUTED: "region.apac.routed"
+      KAFKA_TOPIC_PARTNER_REQUEST_RECEIVED: "partner.request.received"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - banking-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8182/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── End Global Bank Profile Services ───────────────────────────────────────

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { AtlasConfig } from "../config.js";
 import { BackboardClient } from "../backboard/client.js";
 import type { AtlasRepository } from "../db/database.js";
@@ -55,7 +57,7 @@ export class ScanService {
       id: newId("scan"),
       workspaceId,
       repositoryId: repository.id,
-      repoUrl: repoRef.normalizedUrl,
+      repoUrl: repoRef.targetUrl ?? repoRef.normalizedUrl,
       commitSha: input.commitSha,
     });
     this.repository.addEvent({
@@ -76,6 +78,7 @@ export class ScanService {
     if (!scan) throw new Error(`Scan not found: ${scanId}`);
     const repo = this.repository.getRepository(scan.repositoryId);
     if (!repo) throw new Error(`Repository not found for scan: ${scanId}`);
+    const requestedScope = parseGitHubRepo(scan.repoUrl);
 
     try {
       this.repository.updateScanStatus(scanId, "running");
@@ -95,6 +98,7 @@ export class ScanService {
         reposDir: this.config.reposDir,
         scanId,
         commitSha: scan.commitSha ?? undefined,
+        treeRef: requestedScope.treeRef,
         timeoutMs: this.config.scanTimeoutSeconds * 1000,
       });
 
@@ -104,7 +108,25 @@ export class ScanService {
         message: `Resolved commit ${cloned.commitSha}; running deterministic scanners`,
       });
 
-      const artifacts = await scanRepository(cloned.localPath, {
+      let scanRoot = cloned.localPath;
+      if (requestedScope.treePath) {
+        scanRoot = path.resolve(cloned.localPath, requestedScope.treePath);
+        const relative = path.relative(cloned.localPath, scanRoot);
+        if (relative.startsWith("..") || path.isAbsolute(relative)) {
+          throw new Error("Requested tree path escapes the repository root");
+        }
+        const scopedStat = await fs.stat(scanRoot).catch(() => null);
+        if (!scopedStat?.isDirectory()) {
+          throw new Error(`Requested tree path not found or not a directory: ${requestedScope.treePath}`);
+        }
+        this.repository.addEvent({
+          scanId,
+          type: "scan",
+          message: `Scanning subdirectory ${requestedScope.treePath}`,
+        });
+      }
+
+      const artifacts = await scanRepository(scanRoot, {
         maxFiles: this.config.scanMaxFiles,
         maxFileBytes: this.config.scanMaxFileBytes,
       });

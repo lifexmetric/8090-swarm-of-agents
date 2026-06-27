@@ -37,10 +37,43 @@ export function parseGitHubRepo(input: string): RepoRef {
 
   const name = repoName.replace(/\.git$/, "");
   const normalizedUrl = `https://github.com/${owner}/${name}`;
+  const tail = pathParts.slice(2);
+  let treeRef: string | undefined;
+  let treePath: string | undefined;
+
+  if (tail[0] === "tree") {
+    const refPart = tail[1];
+    if (!refPart) {
+      throw new Error("GitHub tree URL must include a branch or tag name");
+    }
+    treeRef = decodeURIComponent(refPart);
+    const treeSegments = tail
+      .slice(2)
+      .map((segment) => decodeURIComponent(segment))
+      .filter(Boolean);
+    if (treeSegments.some((segment) => segment === "." || segment === ".." || segment.includes("\\"))) {
+      throw new Error("GitHub tree URL path must stay within the repository");
+    }
+    treePath = treeSegments.length > 0 ? treeSegments.join("/") : undefined;
+  }
+
+  const targetUrl = treeRef
+    ? `${normalizedUrl}/tree/${encodeURIComponent(treeRef)}${
+        treePath
+          ? `/${treePath
+              .split("/")
+              .map((segment) => encodeURIComponent(segment))
+              .join("/")}`
+          : ""
+      }`
+    : normalizedUrl;
   return {
     owner,
     name,
     normalizedUrl,
     cloneUrl: `${normalizedUrl}.git`,
+    targetUrl,
+    treeRef,
+    treePath,
   };
 }

@@ -1,0 +1,35 @@
+{
+  "name": "apac-routing-service",
+  "title": "Apac Routing Service",
+  "domain": "Regionalization",
+  "port": 8182,
+  "endpoint": "/v1/regions/apac/routes",
+  "region": "apac",
+  "dependencies": [
+    {
+      "name": "swift-rail-service",
+      "url": "http://mock-swift-rail:9999",
+      "env": "SWIFT_RAIL_URL"
+    },
+    {
+      "name": "sanctions-screening-service",
+      "env": "SANCTIONS_SCREENING_SERVICE_URL",
+      "url": "http://sanctions-screening-service:8151"
+    },
+    {
+      "name": "rtp-rail-service",
+      "env": "RTP_RAIL_SERVICE_URL",
+      "url": "http://rtp-rail-service:8142"
+    }
+  ],
+  "topicsProduced": [
+    "region.apac.routed"
+  ],
+  "topicsConsumed": [
+    "partner.request.received"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

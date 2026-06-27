@@ -1,0 +1,30 @@
+{
+  "name": "loan-servicing-service",
+  "title": "Loan Servicing Service",
+  "domain": "Accounts And Ledger",
+  "port": 8134,
+  "endpoint": "/v1/loans/accounts",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "risk-feature-store-service",
+      "env": "RISK_FEATURE_STORE_SERVICE_URL",
+      "url": "http://risk-feature-store-service:8162"
+    }
+  ],
+  "topicsProduced": [
+    "loan.payment.due"
+  ],
+  "topicsConsumed": [
+    "ledger.entry.posted"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

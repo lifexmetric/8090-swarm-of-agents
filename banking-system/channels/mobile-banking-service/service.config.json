@@ -1,0 +1,40 @@
+{
+  "name": "mobile-banking-service",
+  "title": "Mobile Banking Service",
+  "domain": "Channels",
+  "port": 8101,
+  "endpoint": "/v1/mobile/sessions",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "api-management-service",
+      "env": "API_MANAGEMENT_SERVICE_URL",
+      "url": "http://api-management-service:8170"
+    },
+    {
+      "name": "iam-service",
+      "env": "IAM_SERVICE_URL",
+      "url": "http://iam-service:8110"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    },
+    {
+      "name": "accounts-service",
+      "url": "http://accounts-service:8002",
+      "env": "ACCOUNTS_SERVICE_URL"
+    }
+  ],
+  "topicsProduced": [
+    "channel.mobile.login"
+  ],
+  "topicsConsumed": [
+    "fraud.alert"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

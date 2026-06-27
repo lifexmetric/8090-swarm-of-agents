@@ -1,0 +1,32 @@
+{
+  "name": "sanctions-screening-service",
+  "title": "Sanctions Screening Service",
+  "domain": "Risk And Compliance",
+  "port": 8151,
+  "endpoint": "/v1/screening/sanctions",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "case-management-service",
+      "env": "CASE_MANAGEMENT_SERVICE_URL",
+      "url": "http://case-management-service:8154"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "sanctions.screening.completed",
+    "sanctions.hit.detected"
+  ],
+  "topicsConsumed": [
+    "payment.authorized",
+    "kyc.customer.started"
+  ],
+  "dataStores": [
+    "neo4j://neo4j:7687",
+    "kafka://kafka:29092"
+  ]
+}

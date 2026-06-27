@@ -1,0 +1,25 @@
+{
+  "name": "event-warehouse-service",
+  "title": "Event Warehouse Service",
+  "domain": "Data And Analytics",
+  "port": 8161,
+  "endpoint": "/v1/warehouse/events",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "data-lake-ingestion-service",
+      "env": "DATA_LAKE_INGESTION_SERVICE_URL",
+      "url": "http://data-lake-ingestion-service:8160"
+    }
+  ],
+  "topicsProduced": [
+    "warehouse.fact.loaded"
+  ],
+  "topicsConsumed": [
+    "data.lake.object.created"
+  ],
+  "dataStores": [
+    "s3://global-bank-data-lake-demo",
+    "postgres://bank_user@postgres-bank:5432/bank_db"
+  ]
+}

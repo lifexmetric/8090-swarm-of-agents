@@ -1,0 +1,30 @@
+{
+  "name": "config-service",
+  "title": "Config Service",
+  "domain": "Platform Services",
+  "port": 8172,
+  "endpoint": "/v1/config/policies",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "secrets-broker-service",
+      "env": "SECRETS_BROKER_SERVICE_URL",
+      "url": "http://secrets-broker-service:8173"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "config.policy.updated"
+  ],
+  "topicsConsumed": [
+    "employee.access.granted"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

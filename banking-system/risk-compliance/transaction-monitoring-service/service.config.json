@@ -1,0 +1,31 @@
+{
+  "name": "transaction-monitoring-service",
+  "title": "Transaction Monitoring Service",
+  "domain": "Risk And Compliance",
+  "port": 8152,
+  "endpoint": "/v1/monitoring/transactions",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "risk-feature-store-service",
+      "env": "RISK_FEATURE_STORE_SERVICE_URL",
+      "url": "http://risk-feature-store-service:8162"
+    },
+    {
+      "name": "case-management-service",
+      "env": "CASE_MANAGEMENT_SERVICE_URL",
+      "url": "http://case-management-service:8154"
+    }
+  ],
+  "topicsProduced": [
+    "transaction.monitoring.alert"
+  ],
+  "topicsConsumed": [
+    "ledger.entry.posted",
+    "payment.authorized"
+  ],
+  "dataStores": [
+    "neo4j://neo4j:7687",
+    "kafka://kafka:29092"
+  ]
+}

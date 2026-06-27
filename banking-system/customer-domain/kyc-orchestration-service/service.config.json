@@ -1,0 +1,36 @@
+{
+  "name": "kyc-orchestration-service",
+  "title": "Kyc Orchestration Service",
+  "domain": "Customer And CRM",
+  "port": 8121,
+  "endpoint": "/v1/kyc/checks",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "document-verification-service",
+      "env": "DOCUMENT_VERIFICATION_SERVICE_URL",
+      "url": "http://document-verification-service:8122"
+    },
+    {
+      "name": "aml-screening-service",
+      "env": "AML_SCREENING_SERVICE_URL",
+      "url": "http://aml-screening-service:8150"
+    },
+    {
+      "name": "sanctions-screening-service",
+      "env": "SANCTIONS_SCREENING_SERVICE_URL",
+      "url": "http://sanctions-screening-service:8151"
+    }
+  ],
+  "topicsProduced": [
+    "kyc.customer.started",
+    "kyc.customer.verified"
+  ],
+  "topicsConsumed": [
+    "customer.profile.updated"
+  ],
+  "dataStores": [
+    "mongodb://mongodb:27017/customers_db",
+    "redis://redis:6379"
+  ]
+}

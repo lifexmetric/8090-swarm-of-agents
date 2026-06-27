@@ -30,13 +30,19 @@ export async function clonePublicRepoAtCommit(options: {
   reposDir: string;
   scanId: string;
   commitSha?: string;
+  treeRef?: string;
   timeoutMs?: number;
 }): Promise<CloneResult> {
   const target = path.join(options.reposDir, options.scanId);
   await fs.rm(target, { recursive: true, force: true });
   await fs.mkdir(path.dirname(target), { recursive: true });
 
-  await git(["clone", "--depth", "1", options.repoRef.cloneUrl, target], undefined, options.timeoutMs);
+  const cloneArgs = ["clone", "--depth", "1"];
+  if (options.treeRef && !options.commitSha) {
+    cloneArgs.push("--branch", options.treeRef, "--single-branch");
+  }
+  cloneArgs.push(options.repoRef.cloneUrl, target);
+  await git(cloneArgs, undefined, options.timeoutMs);
 
   if (options.commitSha) {
     await git(["fetch", "--depth", "1", "origin", options.commitSha], target, options.timeoutMs);

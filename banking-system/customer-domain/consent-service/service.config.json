@@ -1,0 +1,26 @@
+{
+  "name": "consent-service",
+  "title": "Consent Service",
+  "domain": "Customer And CRM",
+  "port": 8123,
+  "endpoint": "/v1/consents",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "consent.granted",
+    "consent.revoked"
+  ],
+  "topicsConsumed": [
+    "customer.profile.updated"
+  ],
+  "dataStores": [
+    "mongodb://mongodb:27017/customers_db",
+    "redis://redis:6379"
+  ]
+}

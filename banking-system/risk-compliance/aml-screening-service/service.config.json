@@ -1,0 +1,32 @@
+{
+  "name": "aml-screening-service",
+  "title": "Aml Screening Service",
+  "domain": "Risk And Compliance",
+  "port": 8150,
+  "endpoint": "/v1/screening/aml",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "transaction-monitoring-service",
+      "env": "TRANSACTION_MONITORING_SERVICE_URL",
+      "url": "http://transaction-monitoring-service:8152"
+    },
+    {
+      "name": "case-management-service",
+      "env": "CASE_MANAGEMENT_SERVICE_URL",
+      "url": "http://case-management-service:8154"
+    }
+  ],
+  "topicsProduced": [
+    "aml.screening.completed",
+    "aml.case.opened"
+  ],
+  "topicsConsumed": [
+    "payment.authorized",
+    "kyc.customer.started"
+  ],
+  "dataStores": [
+    "neo4j://neo4j:7687",
+    "kafka://kafka:29092"
+  ]
+}

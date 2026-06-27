@@ -1,0 +1,38 @@
+{
+  "name": "case-management-service",
+  "title": "Case Management Service",
+  "domain": "Risk And Compliance",
+  "port": 8154,
+  "endpoint": "/v1/cases",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "employee-access-service",
+      "env": "EMPLOYEE_ACCESS_SERVICE_URL",
+      "url": "http://employee-access-service:8114"
+    },
+    {
+      "name": "notification-service",
+      "url": "http://notification-service:8006",
+      "env": "NOTIFICATION_SERVICE_URL"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "case.created",
+    "case.resolved"
+  ],
+  "topicsConsumed": [
+    "aml.case.opened",
+    "sanctions.hit.detected",
+    "fraud.alert"
+  ],
+  "dataStores": [
+    "neo4j://neo4j:7687",
+    "kafka://kafka:29092"
+  ]
+}

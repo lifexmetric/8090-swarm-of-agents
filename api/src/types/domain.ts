@@ -82,6 +82,9 @@ export interface RepoRef {
   name: string;
   normalizedUrl: string;
   cloneUrl: string;
+  targetUrl?: string;
+  treeRef?: string;
+  treePath?: string;
 }
 
 export interface RepositoryRecord {

@@ -1,0 +1,35 @@
+{
+  "name": "sepa-rail-service",
+  "title": "Sepa Rail Service",
+  "domain": "Payments And Rails",
+  "port": 8141,
+  "endpoint": "/v1/rails/sepa/transfers",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "sanctions-screening-service",
+      "env": "SANCTIONS_SCREENING_SERVICE_URL",
+      "url": "http://sanctions-screening-service:8151"
+    },
+    {
+      "name": "settlement-service",
+      "env": "SETTLEMENT_SERVICE_URL",
+      "url": "http://settlement-service:8144"
+    }
+  ],
+  "topicsProduced": [
+    "sepa.transfer.submitted"
+  ],
+  "topicsConsumed": [
+    "payment.authorized"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

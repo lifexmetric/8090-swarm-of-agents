@@ -1,0 +1,25 @@
+{
+  "name": "secrets-broker-service",
+  "title": "Secrets Broker Service",
+  "domain": "Platform Services",
+  "port": 8173,
+  "endpoint": "/v1/secrets/leases",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "secret.lease.issued"
+  ],
+  "topicsConsumed": [
+    "config.policy.updated"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

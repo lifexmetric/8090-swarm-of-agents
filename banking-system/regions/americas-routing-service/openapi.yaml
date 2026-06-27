@@ -1,0 +1,23 @@
+openapi: 3.0.3
+info:
+  title: Americas Routing Service API
+  version: 0.1.0
+  description: Runnable fake API for the global banking monorepo demo.
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+  /v1/regions/americas/routes:
+    get:
+      summary: Return synthetic regionalization data
+      responses:
+        "200":
+          description: Synthetic response
+    post:
+      summary: Accept a fake request for demo workflows
+      responses:
+        "202":
+          description: Fake request accepted

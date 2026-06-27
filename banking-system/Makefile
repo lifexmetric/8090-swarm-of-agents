@@ -1,4 +1,4 @@
-.PHONY: start stop restart seed seed-graph demo-payment logs status
+.PHONY: start stop restart seed seed-graph demo-payment logs status start-global stop-global status-global logs-global
 
 start:
 	docker compose up --build -d
@@ -93,3 +93,17 @@ fix-swift:
 		git commit -m "fix(payments): revert SWIFT rail endpoint to v2" 2>/dev/null || true
 	docker compose up --build -d payments-service
 	@echo "Fixed. Run 'make demo-payment' to verify."
+
+# ── Global Bank Profile ─────────────────────────────────────────────────────
+start-global:
+	docker compose --profile global up --build -d
+	@echo "Global banking profile running. Try: curl http://localhost:8101/health"
+
+stop-global:
+	docker compose --profile global down
+
+status-global:
+	docker compose --profile global ps
+
+logs-global:
+	docker compose --profile global logs -f --tail=50

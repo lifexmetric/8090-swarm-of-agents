@@ -1,0 +1,31 @@
+{
+  "name": "mfa-service",
+  "title": "Mfa Service",
+  "domain": "Identity And Access",
+  "port": 8111,
+  "endpoint": "/v1/mfa/challenges",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "notification-service",
+      "url": "http://notification-service:8006",
+      "env": "NOTIFICATION_SERVICE_URL"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "mfa.challenge.sent",
+    "mfa.challenge.verified"
+  ],
+  "topicsConsumed": [
+    "identity.login.failed"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

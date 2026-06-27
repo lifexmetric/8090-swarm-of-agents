@@ -1,0 +1,31 @@
+{
+  "name": "employee-access-service",
+  "title": "Employee Access Service",
+  "domain": "Identity And Access",
+  "port": 8114,
+  "endpoint": "/v1/employees/access",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "iam-service",
+      "env": "IAM_SERVICE_URL",
+      "url": "http://iam-service:8110"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "employee.access.granted",
+    "employee.access.revoked"
+  ],
+  "topicsConsumed": [
+    "config.policy.updated"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "rtp-rail-service",
+  "title": "Rtp Rail Service",
+  "domain": "Payments And Rails",
+  "port": 8142,
+  "endpoint": "/v1/rails/rtp/transfers",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "fraud-rules-service",
+      "env": "FRAUD_RULES_SERVICE_URL",
+      "url": "http://fraud-rules-service:8153"
+    },
+    {
+      "name": "settlement-service",
+      "env": "SETTLEMENT_SERVICE_URL",
+      "url": "http://settlement-service:8144"
+    }
+  ],
+  "topicsProduced": [
+    "rtp.transfer.submitted"
+  ],
+  "topicsConsumed": [
+    "payment.authorized"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

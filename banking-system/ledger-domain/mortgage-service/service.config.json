@@ -1,0 +1,35 @@
+{
+  "name": "mortgage-service",
+  "title": "Mortgage Service",
+  "domain": "Accounts And Ledger",
+  "port": 8135,
+  "endpoint": "/v1/mortgages/applications",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    },
+    {
+      "name": "risk-feature-store-service",
+      "env": "RISK_FEATURE_STORE_SERVICE_URL",
+      "url": "http://risk-feature-store-service:8162"
+    },
+    {
+      "name": "document-verification-service",
+      "env": "DOCUMENT_VERIFICATION_SERVICE_URL",
+      "url": "http://document-verification-service:8122"
+    }
+  ],
+  "topicsProduced": [
+    "mortgage.application.created"
+  ],
+  "topicsConsumed": [
+    "document.verification.completed"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

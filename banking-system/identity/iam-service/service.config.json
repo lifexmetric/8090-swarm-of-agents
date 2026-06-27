@@ -1,0 +1,36 @@
+{
+  "name": "iam-service",
+  "title": "Iam Service",
+  "domain": "Identity And Access",
+  "port": 8110,
+  "endpoint": "/v1/identity/tokens",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "mfa-service",
+      "env": "MFA_SERVICE_URL",
+      "url": "http://mfa-service:8111"
+    },
+    {
+      "name": "device-trust-service",
+      "env": "DEVICE_TRUST_SERVICE_URL",
+      "url": "http://device-trust-service:8112"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "identity.login.succeeded",
+    "identity.login.failed"
+  ],
+  "topicsConsumed": [
+    "employee.access.revoked"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

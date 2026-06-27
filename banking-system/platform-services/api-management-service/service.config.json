@@ -1,0 +1,30 @@
+{
+  "name": "api-management-service",
+  "title": "Api Management Service",
+  "domain": "Platform Services",
+  "port": 8170,
+  "endpoint": "/v1/apis/routes",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "config-service",
+      "env": "CONFIG_SERVICE_URL",
+      "url": "http://config-service:8172"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "api.route.changed"
+  ],
+  "topicsConsumed": [
+    "config.policy.updated"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

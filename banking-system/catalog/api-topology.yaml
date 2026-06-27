@@ -1,0 +1,632 @@
+# HTTP dependency topology for global-bank fake services.
+edges:
+  - from: mobile-banking-service
+    to: api-management-service
+    protocol: HTTP
+    env: API_MANAGEMENT_SERVICE_URL
+    url: "http://api-management-service:8170"
+    criticality: demo
+  - from: mobile-banking-service
+    to: iam-service
+    protocol: HTTP
+    env: IAM_SERVICE_URL
+    url: "http://iam-service:8110"
+    criticality: demo
+  - from: mobile-banking-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: mobile-banking-service
+    to: accounts-service
+    protocol: HTTP
+    env: ACCOUNTS_SERVICE_URL
+    url: "http://accounts-service:8002"
+    criticality: demo
+  - from: web-banking-service
+    to: api-management-service
+    protocol: HTTP
+    env: API_MANAGEMENT_SERVICE_URL
+    url: "http://api-management-service:8170"
+    criticality: demo
+  - from: web-banking-service
+    to: iam-service
+    protocol: HTTP
+    env: IAM_SERVICE_URL
+    url: "http://iam-service:8110"
+    criticality: demo
+  - from: web-banking-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: web-banking-service
+    to: payments-service
+    protocol: HTTP
+    env: PAYMENTS_SERVICE_URL
+    url: "http://payments-service:8003"
+    criticality: demo
+  - from: atm-gateway-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: atm-gateway-service
+    to: card-authorization-service
+    protocol: HTTP
+    env: CARD_AUTHORIZATION_SERVICE_URL
+    url: "http://card-authorization-service:8143"
+    criticality: demo
+  - from: atm-gateway-service
+    to: session-risk-service
+    protocol: HTTP
+    env: SESSION_RISK_SERVICE_URL
+    url: "http://session-risk-service:8113"
+    criticality: demo
+  - from: branch-teller-service
+    to: employee-access-service
+    protocol: HTTP
+    env: EMPLOYEE_ACCESS_SERVICE_URL
+    url: "http://employee-access-service:8114"
+    criticality: demo
+  - from: branch-teller-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: branch-teller-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: partner-api-service
+    to: api-management-service
+    protocol: HTTP
+    env: API_MANAGEMENT_SERVICE_URL
+    url: "http://api-management-service:8170"
+    criticality: demo
+  - from: partner-api-service
+    to: consent-service
+    protocol: HTTP
+    env: CONSENT_SERVICE_URL
+    url: "http://consent-service:8123"
+    criticality: demo
+  - from: partner-api-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: iam-service
+    to: mfa-service
+    protocol: HTTP
+    env: MFA_SERVICE_URL
+    url: "http://mfa-service:8111"
+    criticality: demo
+  - from: iam-service
+    to: device-trust-service
+    protocol: HTTP
+    env: DEVICE_TRUST_SERVICE_URL
+    url: "http://device-trust-service:8112"
+    criticality: demo
+  - from: iam-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: mfa-service
+    to: notification-service
+    protocol: HTTP
+    env: NOTIFICATION_SERVICE_URL
+    url: "http://notification-service:8006"
+    criticality: demo
+  - from: mfa-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: device-trust-service
+    to: risk-feature-store-service
+    protocol: HTTP
+    env: RISK_FEATURE_STORE_SERVICE_URL
+    url: "http://risk-feature-store-service:8162"
+    criticality: demo
+  - from: device-trust-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: session-risk-service
+    to: device-trust-service
+    protocol: HTTP
+    env: DEVICE_TRUST_SERVICE_URL
+    url: "http://device-trust-service:8112"
+    criticality: demo
+  - from: session-risk-service
+    to: fraud-rules-service
+    protocol: HTTP
+    env: FRAUD_RULES_SERVICE_URL
+    url: "http://fraud-rules-service:8153"
+    criticality: demo
+  - from: employee-access-service
+    to: iam-service
+    protocol: HTTP
+    env: IAM_SERVICE_URL
+    url: "http://iam-service:8110"
+    criticality: demo
+  - from: employee-access-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: customer-profile-service
+    to: consent-service
+    protocol: HTTP
+    env: CONSENT_SERVICE_URL
+    url: "http://consent-service:8123"
+    criticality: demo
+  - from: customer-profile-service
+    to: customer-preferences-service
+    protocol: HTTP
+    env: CUSTOMER_PREFERENCES_SERVICE_URL
+    url: "http://customer-preferences-service:8124"
+    criticality: demo
+  - from: kyc-orchestration-service
+    to: document-verification-service
+    protocol: HTTP
+    env: DOCUMENT_VERIFICATION_SERVICE_URL
+    url: "http://document-verification-service:8122"
+    criticality: demo
+  - from: kyc-orchestration-service
+    to: aml-screening-service
+    protocol: HTTP
+    env: AML_SCREENING_SERVICE_URL
+    url: "http://aml-screening-service:8150"
+    criticality: demo
+  - from: kyc-orchestration-service
+    to: sanctions-screening-service
+    protocol: HTTP
+    env: SANCTIONS_SCREENING_SERVICE_URL
+    url: "http://sanctions-screening-service:8151"
+    criticality: demo
+  - from: document-verification-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: document-verification-service
+    to: secrets-broker-service
+    protocol: HTTP
+    env: SECRETS_BROKER_SERVICE_URL
+    url: "http://secrets-broker-service:8173"
+    criticality: demo
+  - from: consent-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: customer-preferences-service
+    to: notification-service
+    protocol: HTTP
+    env: NOTIFICATION_SERVICE_URL
+    url: "http://notification-service:8006"
+    criticality: demo
+  - from: customer-preferences-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: core-ledger-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: core-ledger-service
+    to: config-service
+    protocol: HTTP
+    env: CONFIG_SERVICE_URL
+    url: "http://config-service:8172"
+    criticality: demo
+  - from: deposits-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: deposits-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: savings-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: savings-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: card-account-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: card-account-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: card-account-service
+    to: card-authorization-service
+    protocol: HTTP
+    env: CARD_AUTHORIZATION_SERVICE_URL
+    url: "http://card-authorization-service:8143"
+    criticality: demo
+  - from: loan-servicing-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: loan-servicing-service
+    to: risk-feature-store-service
+    protocol: HTTP
+    env: RISK_FEATURE_STORE_SERVICE_URL
+    url: "http://risk-feature-store-service:8162"
+    criticality: demo
+  - from: mortgage-service
+    to: customer-profile-service
+    protocol: HTTP
+    env: CUSTOMER_PROFILE_SERVICE_URL
+    url: "http://customer-profile-service:8120"
+    criticality: demo
+  - from: mortgage-service
+    to: risk-feature-store-service
+    protocol: HTTP
+    env: RISK_FEATURE_STORE_SERVICE_URL
+    url: "http://risk-feature-store-service:8162"
+    criticality: demo
+  - from: mortgage-service
+    to: document-verification-service
+    protocol: HTTP
+    env: DOCUMENT_VERIFICATION_SERVICE_URL
+    url: "http://document-verification-service:8122"
+    criticality: demo
+  - from: ach-rail-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: ach-rail-service
+    to: aml-screening-service
+    protocol: HTTP
+    env: AML_SCREENING_SERVICE_URL
+    url: "http://aml-screening-service:8150"
+    criticality: demo
+  - from: ach-rail-service
+    to: settlement-service
+    protocol: HTTP
+    env: SETTLEMENT_SERVICE_URL
+    url: "http://settlement-service:8144"
+    criticality: demo
+  - from: sepa-rail-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: sepa-rail-service
+    to: sanctions-screening-service
+    protocol: HTTP
+    env: SANCTIONS_SCREENING_SERVICE_URL
+    url: "http://sanctions-screening-service:8151"
+    criticality: demo
+  - from: sepa-rail-service
+    to: settlement-service
+    protocol: HTTP
+    env: SETTLEMENT_SERVICE_URL
+    url: "http://settlement-service:8144"
+    criticality: demo
+  - from: rtp-rail-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: rtp-rail-service
+    to: fraud-rules-service
+    protocol: HTTP
+    env: FRAUD_RULES_SERVICE_URL
+    url: "http://fraud-rules-service:8153"
+    criticality: demo
+  - from: rtp-rail-service
+    to: settlement-service
+    protocol: HTTP
+    env: SETTLEMENT_SERVICE_URL
+    url: "http://settlement-service:8144"
+    criticality: demo
+  - from: card-authorization-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: card-authorization-service
+    to: fraud-rules-service
+    protocol: HTTP
+    env: FRAUD_RULES_SERVICE_URL
+    url: "http://fraud-rules-service:8153"
+    criticality: demo
+  - from: card-authorization-service
+    to: session-risk-service
+    protocol: HTTP
+    env: SESSION_RISK_SERVICE_URL
+    url: "http://session-risk-service:8113"
+    criticality: demo
+  - from: settlement-service
+    to: core-ledger-service
+    protocol: HTTP
+    env: CORE_LEDGER_SERVICE_URL
+    url: "http://core-ledger-service:8130"
+    criticality: demo
+  - from: settlement-service
+    to: reconciliation-service
+    protocol: HTTP
+    env: RECONCILIATION_SERVICE_URL
+    url: "http://reconciliation-service:8145"
+    criticality: demo
+  - from: reconciliation-service
+    to: event-warehouse-service
+    protocol: HTTP
+    env: EVENT_WAREHOUSE_SERVICE_URL
+    url: "http://event-warehouse-service:8161"
+    criticality: demo
+  - from: reconciliation-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: aml-screening-service
+    to: transaction-monitoring-service
+    protocol: HTTP
+    env: TRANSACTION_MONITORING_SERVICE_URL
+    url: "http://transaction-monitoring-service:8152"
+    criticality: demo
+  - from: aml-screening-service
+    to: case-management-service
+    protocol: HTTP
+    env: CASE_MANAGEMENT_SERVICE_URL
+    url: "http://case-management-service:8154"
+    criticality: demo
+  - from: sanctions-screening-service
+    to: case-management-service
+    protocol: HTTP
+    env: CASE_MANAGEMENT_SERVICE_URL
+    url: "http://case-management-service:8154"
+    criticality: demo
+  - from: sanctions-screening-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: transaction-monitoring-service
+    to: risk-feature-store-service
+    protocol: HTTP
+    env: RISK_FEATURE_STORE_SERVICE_URL
+    url: "http://risk-feature-store-service:8162"
+    criticality: demo
+  - from: transaction-monitoring-service
+    to: case-management-service
+    protocol: HTTP
+    env: CASE_MANAGEMENT_SERVICE_URL
+    url: "http://case-management-service:8154"
+    criticality: demo
+  - from: fraud-rules-service
+    to: risk-feature-store-service
+    protocol: HTTP
+    env: RISK_FEATURE_STORE_SERVICE_URL
+    url: "http://risk-feature-store-service:8162"
+    criticality: demo
+  - from: fraud-rules-service
+    to: case-management-service
+    protocol: HTTP
+    env: CASE_MANAGEMENT_SERVICE_URL
+    url: "http://case-management-service:8154"
+    criticality: demo
+  - from: case-management-service
+    to: employee-access-service
+    protocol: HTTP
+    env: EMPLOYEE_ACCESS_SERVICE_URL
+    url: "http://employee-access-service:8114"
+    criticality: demo
+  - from: case-management-service
+    to: notification-service
+    protocol: HTTP
+    env: NOTIFICATION_SERVICE_URL
+    url: "http://notification-service:8006"
+    criticality: demo
+  - from: case-management-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: regulatory-reporting-service
+    to: reporting-marts-service
+    protocol: HTTP
+    env: REPORTING_MARTS_SERVICE_URL
+    url: "http://reporting-marts-service:8163"
+    criticality: demo
+  - from: regulatory-reporting-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: data-lake-ingestion-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: data-lake-ingestion-service
+    to: secrets-broker-service
+    protocol: HTTP
+    env: SECRETS_BROKER_SERVICE_URL
+    url: "http://secrets-broker-service:8173"
+    criticality: demo
+  - from: event-warehouse-service
+    to: data-lake-ingestion-service
+    protocol: HTTP
+    env: DATA_LAKE_INGESTION_SERVICE_URL
+    url: "http://data-lake-ingestion-service:8160"
+    criticality: demo
+  - from: risk-feature-store-service
+    to: event-warehouse-service
+    protocol: HTTP
+    env: EVENT_WAREHOUSE_SERVICE_URL
+    url: "http://event-warehouse-service:8161"
+    criticality: demo
+  - from: reporting-marts-service
+    to: event-warehouse-service
+    protocol: HTTP
+    env: EVENT_WAREHOUSE_SERVICE_URL
+    url: "http://event-warehouse-service:8161"
+    criticality: demo
+  - from: reporting-marts-service
+    to: regulatory-reporting-service
+    protocol: HTTP
+    env: REGULATORY_REPORTING_SERVICE_URL
+    url: "http://regulatory-reporting-service:8155"
+    criticality: demo
+  - from: api-management-service
+    to: config-service
+    protocol: HTTP
+    env: CONFIG_SERVICE_URL
+    url: "http://config-service:8172"
+    criticality: demo
+  - from: api-management-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: service-mesh-control-service
+    to: config-service
+    protocol: HTTP
+    env: CONFIG_SERVICE_URL
+    url: "http://config-service:8172"
+    criticality: demo
+  - from: service-mesh-control-service
+    to: observability-collector-service
+    protocol: HTTP
+    env: OBSERVABILITY_COLLECTOR_SERVICE_URL
+    url: "http://observability-collector-service:8175"
+    criticality: demo
+  - from: config-service
+    to: secrets-broker-service
+    protocol: HTTP
+    env: SECRETS_BROKER_SERVICE_URL
+    url: "http://secrets-broker-service:8173"
+    criticality: demo
+  - from: config-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: secrets-broker-service
+    to: audit-log-service
+    protocol: HTTP
+    env: AUDIT_LOG_SERVICE_URL
+    url: "http://audit-log-service:8174"
+    criticality: demo
+  - from: audit-log-service
+    to: event-warehouse-service
+    protocol: HTTP
+    env: EVENT_WAREHOUSE_SERVICE_URL
+    url: "http://event-warehouse-service:8161"
+    criticality: demo
+  - from: observability-collector-service
+    to: event-warehouse-service
+    protocol: HTTP
+    env: EVENT_WAREHOUSE_SERVICE_URL
+    url: "http://event-warehouse-service:8161"
+    criticality: demo
+  - from: americas-routing-service
+    to: ach-rail-service
+    protocol: HTTP
+    env: ACH_RAIL_SERVICE_URL
+    url: "http://ach-rail-service:8140"
+    criticality: demo
+  - from: americas-routing-service
+    to: rtp-rail-service
+    protocol: HTTP
+    env: RTP_RAIL_SERVICE_URL
+    url: "http://rtp-rail-service:8142"
+    criticality: demo
+  - from: americas-routing-service
+    to: card-authorization-service
+    protocol: HTTP
+    env: CARD_AUTHORIZATION_SERVICE_URL
+    url: "http://card-authorization-service:8143"
+    criticality: demo
+  - from: emea-routing-service
+    to: sepa-rail-service
+    protocol: HTTP
+    env: SEPA_RAIL_SERVICE_URL
+    url: "http://sepa-rail-service:8141"
+    criticality: demo
+  - from: emea-routing-service
+    to: sanctions-screening-service
+    protocol: HTTP
+    env: SANCTIONS_SCREENING_SERVICE_URL
+    url: "http://sanctions-screening-service:8151"
+    criticality: demo
+  - from: emea-routing-service
+    to: swift-rail-service
+    protocol: HTTP
+    env: SWIFT_RAIL_URL
+    url: "http://mock-swift-rail:9999"
+    criticality: demo
+  - from: apac-routing-service
+    to: swift-rail-service
+    protocol: HTTP
+    env: SWIFT_RAIL_URL
+    url: "http://mock-swift-rail:9999"
+    criticality: demo
+  - from: apac-routing-service
+    to: sanctions-screening-service
+    protocol: HTTP
+    env: SANCTIONS_SCREENING_SERVICE_URL
+    url: "http://sanctions-screening-service:8151"
+    criticality: demo
+  - from: apac-routing-service
+    to: rtp-rail-service
+    protocol: HTTP
+    env: RTP_RAIL_SERVICE_URL
+    url: "http://rtp-rail-service:8142"
+    criticality: demo

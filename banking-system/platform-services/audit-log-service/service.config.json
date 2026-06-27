@@ -1,0 +1,27 @@
+{
+  "name": "audit-log-service",
+  "title": "Audit Log Service",
+  "domain": "Platform Services",
+  "port": 8174,
+  "endpoint": "/v1/audit/events",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "event-warehouse-service",
+      "env": "EVENT_WAREHOUSE_SERVICE_URL",
+      "url": "http://event-warehouse-service:8161"
+    }
+  ],
+  "topicsProduced": [
+    "audit.event.recorded"
+  ],
+  "topicsConsumed": [
+    "identity.login.succeeded",
+    "ledger.entry.posted",
+    "case.created"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

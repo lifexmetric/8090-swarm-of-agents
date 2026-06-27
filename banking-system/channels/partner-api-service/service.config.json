@@ -1,0 +1,35 @@
+{
+  "name": "partner-api-service",
+  "title": "Partner Api Service",
+  "domain": "Channels",
+  "port": 8105,
+  "endpoint": "/v1/partners/requests",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "api-management-service",
+      "env": "API_MANAGEMENT_SERVICE_URL",
+      "url": "http://api-management-service:8170"
+    },
+    {
+      "name": "consent-service",
+      "env": "CONSENT_SERVICE_URL",
+      "url": "http://consent-service:8123"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    }
+  ],
+  "topicsProduced": [
+    "partner.request.received"
+  ],
+  "topicsConsumed": [
+    "consent.revoked"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

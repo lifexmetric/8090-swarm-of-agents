@@ -1,0 +1,30 @@
+{
+  "name": "service-mesh-control-service",
+  "title": "Service Mesh Control Service",
+  "domain": "Platform Services",
+  "port": 8171,
+  "endpoint": "/v1/mesh/routes",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "config-service",
+      "env": "CONFIG_SERVICE_URL",
+      "url": "http://config-service:8172"
+    },
+    {
+      "name": "observability-collector-service",
+      "env": "OBSERVABILITY_COLLECTOR_SERVICE_URL",
+      "url": "http://observability-collector-service:8175"
+    }
+  ],
+  "topicsProduced": [
+    "mesh.route.changed"
+  ],
+  "topicsConsumed": [
+    "api.route.changed"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

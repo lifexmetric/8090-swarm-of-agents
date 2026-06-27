@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: global-bank-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: global-bank-service-catalog
+  namespace: global-bank-demo
+data:
+  profile: global
+  service-count: "46"
+  note: Runnable fake services mirror docker-compose global profile.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: global-bank-edge
+  namespace: global-bank-demo
+spec:
+  rules:
+    - host: global-bank.local
+      http:
+        paths:
+          - path: /v1/mobile/sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: mobile-banking-service
+                port:
+                  number: 8101
+          - path: /v1/web/sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: web-banking-service
+                port:
+                  number: 8102
+          - path: /v1/atm/withdrawals
+            pathType: Prefix
+            backend:
+              service:
+                name: atm-gateway-service
+                port:
+                  number: 8103
+          - path: /v1/branch/transactions
+            pathType: Prefix
+            backend:
+              service:
+                name: branch-teller-service
+                port:
+                  number: 8104
+          - path: /v1/partners/requests
+            pathType: Prefix
+            backend:
+              service:
+                name: partner-api-service
+                port:
+                  number: 8105
+          - path: /v1/identity/tokens
+            pathType: Prefix
+            backend:
+              service:
+                name: iam-service
+                port:
+                  number: 8110
+          - path: /v1/mfa/challenges
+            pathType: Prefix
+            backend:
+              service:
+                name: mfa-service
+                port:
+                  number: 8111
+          - path: /v1/devices/trust-score
+            pathType: Prefix
+            backend:
+              service:
+                name: device-trust-service
+                port:
+                  number: 8112
+          - path: /v1/sessions/risk
+            pathType: Prefix
+            backend:
+              service:
+                name: session-risk-service
+                port:
+                  number: 8113
+          - path: /v1/employees/access
+            pathType: Prefix
+            backend:
+              service:
+                name: employee-access-service
+                port:
+                  number: 8114
+          - path: /v1/customers/profile
+            pathType: Prefix
+            backend:
+              service:
+                name: customer-profile-service
+                port:
+                  number: 8120
+          - path: /v1/kyc/checks
+            pathType: Prefix
+            backend:
+              service:
+                name: kyc-orchestration-service
+                port:
+                  number: 8121

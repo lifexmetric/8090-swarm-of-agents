@@ -104,6 +104,16 @@ describe("repo URL validation", () => {
     );
   });
 
+  it("accepts GitHub tree URLs and preserves requested scope", () => {
+    const parsed = parseGitHubRepo("https://github.com/lifexmetric/8090-swarm-of-agents/tree/main/banking-system");
+    expect(parsed.normalizedUrl).toBe("https://github.com/lifexmetric/8090-swarm-of-agents");
+    expect(parsed.treeRef).toBe("main");
+    expect(parsed.treePath).toBe("banking-system");
+    expect(parsed.targetUrl).toBe(
+      "https://github.com/lifexmetric/8090-swarm-of-agents/tree/main/banking-system",
+    );
+  });
+
   it("rejects non-GitHub URLs", () => {
     expect(() => repoUrlSchema.parse("https://gitlab.com/a/b")).toThrow();
     expect(() => repoUrlSchema.parse("not-a-repo")).toThrow();

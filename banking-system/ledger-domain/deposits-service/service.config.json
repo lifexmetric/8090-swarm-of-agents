@@ -1,0 +1,30 @@
+{
+  "name": "deposits-service",
+  "title": "Deposits Service",
+  "domain": "Accounts And Ledger",
+  "port": 8131,
+  "endpoint": "/v1/deposits/accounts",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    }
+  ],
+  "topicsProduced": [
+    "deposit.account.opened"
+  ],
+  "topicsConsumed": [
+    "kyc.customer.verified"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

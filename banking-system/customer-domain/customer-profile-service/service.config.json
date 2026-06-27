@@ -1,0 +1,30 @@
+{
+  "name": "customer-profile-service",
+  "title": "Customer Profile Service",
+  "domain": "Customer And CRM",
+  "port": 8120,
+  "endpoint": "/v1/customers/profile",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "consent-service",
+      "env": "CONSENT_SERVICE_URL",
+      "url": "http://consent-service:8123"
+    },
+    {
+      "name": "customer-preferences-service",
+      "env": "CUSTOMER_PREFERENCES_SERVICE_URL",
+      "url": "http://customer-preferences-service:8124"
+    }
+  ],
+  "topicsProduced": [
+    "customer.profile.updated"
+  ],
+  "topicsConsumed": [
+    "kyc.customer.verified"
+  ],
+  "dataStores": [
+    "mongodb://mongodb:27017/customers_db",
+    "redis://redis:6379"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "regulatory-reporting-service",
+  "title": "Regulatory Reporting Service",
+  "domain": "Risk And Compliance",
+  "port": 8155,
+  "endpoint": "/v1/regulatory/reports",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "reporting-marts-service",
+      "env": "REPORTING_MARTS_SERVICE_URL",
+      "url": "http://reporting-marts-service:8163"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "regulatory.report.filed"
+  ],
+  "topicsConsumed": [
+    "case.resolved",
+    "reconciliation.completed"
+  ],
+  "dataStores": [
+    "neo4j://neo4j:7687",
+    "kafka://kafka:29092"
+  ]
+}

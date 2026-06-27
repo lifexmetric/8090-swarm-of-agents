@@ -1,0 +1,31 @@
+{
+  "name": "reconciliation-service",
+  "title": "Reconciliation Service",
+  "domain": "Payments And Rails",
+  "port": 8145,
+  "endpoint": "/v1/reconciliation/runs",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "event-warehouse-service",
+      "env": "EVENT_WAREHOUSE_SERVICE_URL",
+      "url": "http://event-warehouse-service:8161"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "reconciliation.completed"
+  ],
+  "topicsConsumed": [
+    "settlement.batch.created",
+    "ledger.entry.posted"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

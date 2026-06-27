@@ -1,0 +1,31 @@
+{
+  "name": "device-trust-service",
+  "title": "Device Trust Service",
+  "domain": "Identity And Access",
+  "port": 8112,
+  "endpoint": "/v1/devices/trust-score",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "risk-feature-store-service",
+      "env": "RISK_FEATURE_STORE_SERVICE_URL",
+      "url": "http://risk-feature-store-service:8162"
+    },
+    {
+      "name": "audit-log-service",
+      "env": "AUDIT_LOG_SERVICE_URL",
+      "url": "http://audit-log-service:8174"
+    }
+  ],
+  "topicsProduced": [
+    "device.trust.scored"
+  ],
+  "topicsConsumed": [
+    "channel.mobile.login",
+    "channel.web.login"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

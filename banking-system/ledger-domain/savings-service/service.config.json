@@ -1,0 +1,30 @@
+{
+  "name": "savings-service",
+  "title": "Savings Service",
+  "domain": "Accounts And Ledger",
+  "port": 8132,
+  "endpoint": "/v1/savings/accounts",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "customer-profile-service",
+      "env": "CUSTOMER_PROFILE_SERVICE_URL",
+      "url": "http://customer-profile-service:8120"
+    }
+  ],
+  "topicsProduced": [
+    "savings.account.opened"
+  ],
+  "topicsConsumed": [
+    "deposit.account.opened"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

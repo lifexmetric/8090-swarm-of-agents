@@ -1,0 +1,35 @@
+{
+  "name": "atm-gateway-service",
+  "title": "Atm Gateway Service",
+  "domain": "Channels",
+  "port": 8103,
+  "endpoint": "/v1/atm/withdrawals",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "card-authorization-service",
+      "env": "CARD_AUTHORIZATION_SERVICE_URL",
+      "url": "http://card-authorization-service:8143"
+    },
+    {
+      "name": "session-risk-service",
+      "env": "SESSION_RISK_SERVICE_URL",
+      "url": "http://session-risk-service:8113"
+    }
+  ],
+  "topicsProduced": [
+    "atm.withdrawal.requested"
+  ],
+  "topicsConsumed": [
+    "ledger.entry.posted"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "card-authorization-service",
+  "title": "Card Authorization Service",
+  "domain": "Payments And Rails",
+  "port": 8143,
+  "endpoint": "/v1/cards/authorizations",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "core-ledger-service",
+      "env": "CORE_LEDGER_SERVICE_URL",
+      "url": "http://core-ledger-service:8130"
+    },
+    {
+      "name": "fraud-rules-service",
+      "env": "FRAUD_RULES_SERVICE_URL",
+      "url": "http://fraud-rules-service:8153"
+    },
+    {
+      "name": "session-risk-service",
+      "env": "SESSION_RISK_SERVICE_URL",
+      "url": "http://session-risk-service:8113"
+    }
+  ],
+  "topicsProduced": [
+    "card.authorization.approved",
+    "payment.authorized"
+  ],
+  "topicsConsumed": [
+    "atm.withdrawal.requested"
+  ],
+  "dataStores": [
+    "postgres://bank_user@postgres-bank:5432/bank_db",
+    "kafka://kafka:29092"
+  ]
+}

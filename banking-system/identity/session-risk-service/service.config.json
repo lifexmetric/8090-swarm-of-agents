@@ -1,0 +1,30 @@
+{
+  "name": "session-risk-service",
+  "title": "Session Risk Service",
+  "domain": "Identity And Access",
+  "port": 8113,
+  "endpoint": "/v1/sessions/risk",
+  "region": "global",
+  "dependencies": [
+    {
+      "name": "device-trust-service",
+      "env": "DEVICE_TRUST_SERVICE_URL",
+      "url": "http://device-trust-service:8112"
+    },
+    {
+      "name": "fraud-rules-service",
+      "env": "FRAUD_RULES_SERVICE_URL",
+      "url": "http://fraud-rules-service:8153"
+    }
+  ],
+  "topicsProduced": [
+    "session.risk.scored"
+  ],
+  "topicsConsumed": [
+    "identity.login.succeeded"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}

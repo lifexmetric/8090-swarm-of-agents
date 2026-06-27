@@ -1,0 +1,1033 @@
+# Global Bank service catalog. Dummy services are runnable and return synthetic data.
+services:
+  - name: mobile-banking-service
+    domain: "Channels"
+    owner: "Channels Platform Team"
+    path: "channels/mobile-banking-service"
+    port: 8101
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8101/health"
+    api:
+      basePath: "/v1/mobile/sessions"
+      style: REST
+    dependencies:
+      - service: api-management-service
+        env: API_MANAGEMENT_SERVICE_URL
+        url: "http://api-management-service:8170"
+      - service: iam-service
+        env: IAM_SERVICE_URL
+        url: "http://iam-service:8110"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+      - service: accounts-service
+        env: ACCOUNTS_SERVICE_URL
+        url: "http://accounts-service:8002"
+    topicsProduced:
+      - channel.mobile.login
+    topicsConsumed:
+      - fraud.alert
+  - name: web-banking-service
+    domain: "Channels"
+    owner: "Channels Platform Team"
+    path: "channels/web-banking-service"
+    port: 8102
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8102/health"
+    api:
+      basePath: "/v1/web/sessions"
+      style: REST
+    dependencies:
+      - service: api-management-service
+        env: API_MANAGEMENT_SERVICE_URL
+        url: "http://api-management-service:8170"
+      - service: iam-service
+        env: IAM_SERVICE_URL
+        url: "http://iam-service:8110"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+      - service: payments-service
+        env: PAYMENTS_SERVICE_URL
+        url: "http://payments-service:8003"
+    topicsProduced:
+      - channel.web.login
+    topicsConsumed:
+      - customer.preference.updated
+  - name: atm-gateway-service
+    domain: "Channels"
+    owner: "Channels Platform Team"
+    path: "channels/atm-gateway-service"
+    port: 8103
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8103/health"
+    api:
+      basePath: "/v1/atm/withdrawals"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: card-authorization-service
+        env: CARD_AUTHORIZATION_SERVICE_URL
+        url: "http://card-authorization-service:8143"
+      - service: session-risk-service
+        env: SESSION_RISK_SERVICE_URL
+        url: "http://session-risk-service:8113"
+    topicsProduced:
+      - atm.withdrawal.requested
+    topicsConsumed:
+      - ledger.entry.posted
+  - name: branch-teller-service
+    domain: "Channels"
+    owner: "Channels Platform Team"
+    path: "channels/branch-teller-service"
+    port: 8104
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8104/health"
+    api:
+      basePath: "/v1/branch/transactions"
+      style: REST
+    dependencies:
+      - service: employee-access-service
+        env: EMPLOYEE_ACCESS_SERVICE_URL
+        url: "http://employee-access-service:8114"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+    topicsProduced:
+      - branch.transaction.created
+    topicsConsumed:
+      - aml.case.opened
+  - name: partner-api-service
+    domain: "Channels"
+    owner: "Channels Platform Team"
+    path: "channels/partner-api-service"
+    port: 8105
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8105/health"
+    api:
+      basePath: "/v1/partners/requests"
+      style: REST
+    dependencies:
+      - service: api-management-service
+        env: API_MANAGEMENT_SERVICE_URL
+        url: "http://api-management-service:8170"
+      - service: consent-service
+        env: CONSENT_SERVICE_URL
+        url: "http://consent-service:8123"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+    topicsProduced:
+      - partner.request.received
+    topicsConsumed:
+      - consent.revoked
+  - name: iam-service
+    domain: "Identity And Access"
+    owner: "Identity And Access Platform Team"
+    path: "identity/iam-service"
+    port: 8110
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8110/health"
+    api:
+      basePath: "/v1/identity/tokens"
+      style: REST
+    dependencies:
+      - service: mfa-service
+        env: MFA_SERVICE_URL
+        url: "http://mfa-service:8111"
+      - service: device-trust-service
+        env: DEVICE_TRUST_SERVICE_URL
+        url: "http://device-trust-service:8112"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - identity.login.succeeded
+      - identity.login.failed
+    topicsConsumed:
+      - employee.access.revoked
+  - name: mfa-service
+    domain: "Identity And Access"
+    owner: "Identity And Access Platform Team"
+    path: "identity/mfa-service"
+    port: 8111
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8111/health"
+    api:
+      basePath: "/v1/mfa/challenges"
+      style: REST
+    dependencies:
+      - service: notification-service
+        env: NOTIFICATION_SERVICE_URL
+        url: "http://notification-service:8006"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - mfa.challenge.sent
+      - mfa.challenge.verified
+    topicsConsumed:
+      - identity.login.failed
+  - name: device-trust-service
+    domain: "Identity And Access"
+    owner: "Identity And Access Platform Team"
+    path: "identity/device-trust-service"
+    port: 8112
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8112/health"
+    api:
+      basePath: "/v1/devices/trust-score"
+      style: REST
+    dependencies:
+      - service: risk-feature-store-service
+        env: RISK_FEATURE_STORE_SERVICE_URL
+        url: "http://risk-feature-store-service:8162"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - device.trust.scored
+    topicsConsumed:
+      - channel.mobile.login
+      - channel.web.login
+  - name: session-risk-service
+    domain: "Identity And Access"
+    owner: "Identity And Access Platform Team"
+    path: "identity/session-risk-service"
+    port: 8113
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8113/health"
+    api:
+      basePath: "/v1/sessions/risk"
+      style: REST
+    dependencies:
+      - service: device-trust-service
+        env: DEVICE_TRUST_SERVICE_URL
+        url: "http://device-trust-service:8112"
+      - service: fraud-rules-service
+        env: FRAUD_RULES_SERVICE_URL
+        url: "http://fraud-rules-service:8153"
+    topicsProduced:
+      - session.risk.scored
+    topicsConsumed:
+      - identity.login.succeeded
+  - name: employee-access-service
+    domain: "Identity And Access"
+    owner: "Identity And Access Platform Team"
+    path: "identity/employee-access-service"
+    port: 8114
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8114/health"
+    api:
+      basePath: "/v1/employees/access"
+      style: REST
+    dependencies:
+      - service: iam-service
+        env: IAM_SERVICE_URL
+        url: "http://iam-service:8110"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - employee.access.granted
+      - employee.access.revoked
+    topicsConsumed:
+      - config.policy.updated
+  - name: customer-profile-service
+    domain: "Customer And CRM"
+    owner: "Customer And CRM Platform Team"
+    path: "customer-domain/customer-profile-service"
+    port: 8120
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8120/health"
+    api:
+      basePath: "/v1/customers/profile"
+      style: REST
+    dependencies:
+      - service: consent-service
+        env: CONSENT_SERVICE_URL
+        url: "http://consent-service:8123"
+      - service: customer-preferences-service
+        env: CUSTOMER_PREFERENCES_SERVICE_URL
+        url: "http://customer-preferences-service:8124"
+    topicsProduced:
+      - customer.profile.updated
+    topicsConsumed:
+      - kyc.customer.verified
+  - name: kyc-orchestration-service
+    domain: "Customer And CRM"
+    owner: "Customer And CRM Platform Team"
+    path: "customer-domain/kyc-orchestration-service"
+    port: 8121
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8121/health"
+    api:
+      basePath: "/v1/kyc/checks"
+      style: REST
+    dependencies:
+      - service: document-verification-service
+        env: DOCUMENT_VERIFICATION_SERVICE_URL
+        url: "http://document-verification-service:8122"
+      - service: aml-screening-service
+        env: AML_SCREENING_SERVICE_URL
+        url: "http://aml-screening-service:8150"
+      - service: sanctions-screening-service
+        env: SANCTIONS_SCREENING_SERVICE_URL
+        url: "http://sanctions-screening-service:8151"
+    topicsProduced:
+      - kyc.customer.started
+      - kyc.customer.verified
+    topicsConsumed:
+      - customer.profile.updated
+  - name: document-verification-service
+    domain: "Customer And CRM"
+    owner: "Customer And CRM Platform Team"
+    path: "customer-domain/document-verification-service"
+    port: 8122
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8122/health"
+    api:
+      basePath: "/v1/documents/verification"
+      style: REST
+    dependencies:
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+      - service: secrets-broker-service
+        env: SECRETS_BROKER_SERVICE_URL
+        url: "http://secrets-broker-service:8173"
+    topicsProduced:
+      - document.verification.completed
+    topicsConsumed:
+      - kyc.customer.started
+  - name: consent-service
+    domain: "Customer And CRM"
+    owner: "Customer And CRM Platform Team"
+    path: "customer-domain/consent-service"
+    port: 8123
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8123/health"
+    api:
+      basePath: "/v1/consents"
+      style: REST
+    dependencies:
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - consent.granted
+      - consent.revoked
+    topicsConsumed:
+      - customer.profile.updated
+  - name: customer-preferences-service
+    domain: "Customer And CRM"
+    owner: "Customer And CRM Platform Team"
+    path: "customer-domain/customer-preferences-service"
+    port: 8124
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8124/health"
+    api:
+      basePath: "/v1/customers/preferences"
+      style: REST
+    dependencies:
+      - service: notification-service
+        env: NOTIFICATION_SERVICE_URL
+        url: "http://notification-service:8006"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - customer.preference.updated
+    topicsConsumed:
+      - consent.revoked
+  - name: core-ledger-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/core-ledger-service"
+    port: 8130
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8130/health"
+    api:
+      basePath: "/v1/ledger/entries"
+      style: REST
+    dependencies:
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+      - service: config-service
+        env: CONFIG_SERVICE_URL
+        url: "http://config-service:8172"
+    topicsProduced:
+      - ledger.entry.posted
+    topicsConsumed:
+      - payment.authorized
+      - branch.transaction.created
+  - name: deposits-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/deposits-service"
+    port: 8131
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8131/health"
+    api:
+      basePath: "/v1/deposits/accounts"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+    topicsProduced:
+      - deposit.account.opened
+    topicsConsumed:
+      - kyc.customer.verified
+  - name: savings-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/savings-service"
+    port: 8132
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8132/health"
+    api:
+      basePath: "/v1/savings/accounts"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+    topicsProduced:
+      - savings.account.opened
+    topicsConsumed:
+      - deposit.account.opened
+  - name: card-account-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/card-account-service"
+    port: 8133
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8133/health"
+    api:
+      basePath: "/v1/cards/accounts"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+      - service: card-authorization-service
+        env: CARD_AUTHORIZATION_SERVICE_URL
+        url: "http://card-authorization-service:8143"
+    topicsProduced:
+      - card.account.created
+    topicsConsumed:
+      - kyc.customer.verified
+  - name: loan-servicing-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/loan-servicing-service"
+    port: 8134
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8134/health"
+    api:
+      basePath: "/v1/loans/accounts"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: risk-feature-store-service
+        env: RISK_FEATURE_STORE_SERVICE_URL
+        url: "http://risk-feature-store-service:8162"
+    topicsProduced:
+      - loan.payment.due
+    topicsConsumed:
+      - ledger.entry.posted
+  - name: mortgage-service
+    domain: "Accounts And Ledger"
+    owner: "Accounts And Ledger Platform Team"
+    path: "ledger-domain/mortgage-service"
+    port: 8135
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8135/health"
+    api:
+      basePath: "/v1/mortgages/applications"
+      style: REST
+    dependencies:
+      - service: customer-profile-service
+        env: CUSTOMER_PROFILE_SERVICE_URL
+        url: "http://customer-profile-service:8120"
+      - service: risk-feature-store-service
+        env: RISK_FEATURE_STORE_SERVICE_URL
+        url: "http://risk-feature-store-service:8162"
+      - service: document-verification-service
+        env: DOCUMENT_VERIFICATION_SERVICE_URL
+        url: "http://document-verification-service:8122"
+    topicsProduced:
+      - mortgage.application.created
+    topicsConsumed:
+      - document.verification.completed
+  - name: ach-rail-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/ach-rail-service"
+    port: 8140
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8140/health"
+    api:
+      basePath: "/v1/rails/ach/transfers"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: aml-screening-service
+        env: AML_SCREENING_SERVICE_URL
+        url: "http://aml-screening-service:8150"
+      - service: settlement-service
+        env: SETTLEMENT_SERVICE_URL
+        url: "http://settlement-service:8144"
+    topicsProduced:
+      - ach.transfer.submitted
+    topicsConsumed:
+      - payment.authorized
+  - name: sepa-rail-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/sepa-rail-service"
+    port: 8141
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8141/health"
+    api:
+      basePath: "/v1/rails/sepa/transfers"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: sanctions-screening-service
+        env: SANCTIONS_SCREENING_SERVICE_URL
+        url: "http://sanctions-screening-service:8151"
+      - service: settlement-service
+        env: SETTLEMENT_SERVICE_URL
+        url: "http://settlement-service:8144"
+    topicsProduced:
+      - sepa.transfer.submitted
+    topicsConsumed:
+      - payment.authorized
+  - name: rtp-rail-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/rtp-rail-service"
+    port: 8142
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8142/health"
+    api:
+      basePath: "/v1/rails/rtp/transfers"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: fraud-rules-service
+        env: FRAUD_RULES_SERVICE_URL
+        url: "http://fraud-rules-service:8153"
+      - service: settlement-service
+        env: SETTLEMENT_SERVICE_URL
+        url: "http://settlement-service:8144"
+    topicsProduced:
+      - rtp.transfer.submitted
+    topicsConsumed:
+      - payment.authorized
+  - name: card-authorization-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/card-authorization-service"
+    port: 8143
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8143/health"
+    api:
+      basePath: "/v1/cards/authorizations"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: fraud-rules-service
+        env: FRAUD_RULES_SERVICE_URL
+        url: "http://fraud-rules-service:8153"
+      - service: session-risk-service
+        env: SESSION_RISK_SERVICE_URL
+        url: "http://session-risk-service:8113"
+    topicsProduced:
+      - card.authorization.approved
+      - payment.authorized
+    topicsConsumed:
+      - atm.withdrawal.requested
+  - name: settlement-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/settlement-service"
+    port: 8144
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8144/health"
+    api:
+      basePath: "/v1/settlement/batches"
+      style: REST
+    dependencies:
+      - service: core-ledger-service
+        env: CORE_LEDGER_SERVICE_URL
+        url: "http://core-ledger-service:8130"
+      - service: reconciliation-service
+        env: RECONCILIATION_SERVICE_URL
+        url: "http://reconciliation-service:8145"
+    topicsProduced:
+      - settlement.batch.created
+    topicsConsumed:
+      - ach.transfer.submitted
+      - sepa.transfer.submitted
+      - rtp.transfer.submitted
+  - name: reconciliation-service
+    domain: "Payments And Rails"
+    owner: "Payments And Rails Platform Team"
+    path: "payments-rails/reconciliation-service"
+    port: 8145
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8145/health"
+    api:
+      basePath: "/v1/reconciliation/runs"
+      style: REST
+    dependencies:
+      - service: event-warehouse-service
+        env: EVENT_WAREHOUSE_SERVICE_URL
+        url: "http://event-warehouse-service:8161"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - reconciliation.completed
+    topicsConsumed:
+      - settlement.batch.created
+      - ledger.entry.posted
+  - name: aml-screening-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/aml-screening-service"
+    port: 8150
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8150/health"
+    api:
+      basePath: "/v1/screening/aml"
+      style: REST
+    dependencies:
+      - service: transaction-monitoring-service
+        env: TRANSACTION_MONITORING_SERVICE_URL
+        url: "http://transaction-monitoring-service:8152"
+      - service: case-management-service
+        env: CASE_MANAGEMENT_SERVICE_URL
+        url: "http://case-management-service:8154"
+    topicsProduced:
+      - aml.screening.completed
+      - aml.case.opened
+    topicsConsumed:
+      - payment.authorized
+      - kyc.customer.started
+  - name: sanctions-screening-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/sanctions-screening-service"
+    port: 8151
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8151/health"
+    api:
+      basePath: "/v1/screening/sanctions"
+      style: REST
+    dependencies:
+      - service: case-management-service
+        env: CASE_MANAGEMENT_SERVICE_URL
+        url: "http://case-management-service:8154"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - sanctions.screening.completed
+      - sanctions.hit.detected
+    topicsConsumed:
+      - payment.authorized
+      - kyc.customer.started
+  - name: transaction-monitoring-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/transaction-monitoring-service"
+    port: 8152
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8152/health"
+    api:
+      basePath: "/v1/monitoring/transactions"
+      style: REST
+    dependencies:
+      - service: risk-feature-store-service
+        env: RISK_FEATURE_STORE_SERVICE_URL
+        url: "http://risk-feature-store-service:8162"
+      - service: case-management-service
+        env: CASE_MANAGEMENT_SERVICE_URL
+        url: "http://case-management-service:8154"
+    topicsProduced:
+      - transaction.monitoring.alert
+    topicsConsumed:
+      - ledger.entry.posted
+      - payment.authorized
+  - name: fraud-rules-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/fraud-rules-service"
+    port: 8153
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8153/health"
+    api:
+      basePath: "/v1/fraud/rules/evaluate"
+      style: REST
+    dependencies:
+      - service: risk-feature-store-service
+        env: RISK_FEATURE_STORE_SERVICE_URL
+        url: "http://risk-feature-store-service:8162"
+      - service: case-management-service
+        env: CASE_MANAGEMENT_SERVICE_URL
+        url: "http://case-management-service:8154"
+    topicsProduced:
+      - fraud.alert
+    topicsConsumed:
+      - session.risk.scored
+      - card.authorization.approved
+  - name: case-management-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/case-management-service"
+    port: 8154
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8154/health"
+    api:
+      basePath: "/v1/cases"
+      style: REST
+    dependencies:
+      - service: employee-access-service
+        env: EMPLOYEE_ACCESS_SERVICE_URL
+        url: "http://employee-access-service:8114"
+      - service: notification-service
+        env: NOTIFICATION_SERVICE_URL
+        url: "http://notification-service:8006"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - case.created
+      - case.resolved
+    topicsConsumed:
+      - aml.case.opened
+      - sanctions.hit.detected
+      - fraud.alert
+  - name: regulatory-reporting-service
+    domain: "Risk And Compliance"
+    owner: "Risk And Compliance Platform Team"
+    path: "risk-compliance/regulatory-reporting-service"
+    port: 8155
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8155/health"
+    api:
+      basePath: "/v1/regulatory/reports"
+      style: REST
+    dependencies:
+      - service: reporting-marts-service
+        env: REPORTING_MARTS_SERVICE_URL
+        url: "http://reporting-marts-service:8163"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - regulatory.report.filed
+    topicsConsumed:
+      - case.resolved
+      - reconciliation.completed
+  - name: data-lake-ingestion-service
+    domain: "Data And Analytics"
+    owner: "Data And Analytics Platform Team"
+    path: "data-platform/data-lake-ingestion-service"
+    port: 8160
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8160/health"
+    api:
+      basePath: "/v1/data-lake/ingest"
+      style: REST
+    dependencies:
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+      - service: secrets-broker-service
+        env: SECRETS_BROKER_SERVICE_URL
+        url: "http://secrets-broker-service:8173"
+    topicsProduced:
+      - data.lake.object.created
+    topicsConsumed:
+      - ledger.entry.posted
+      - customer.profile.updated
+      - payment.authorized
+  - name: event-warehouse-service
+    domain: "Data And Analytics"
+    owner: "Data And Analytics Platform Team"
+    path: "data-platform/event-warehouse-service"
+    port: 8161
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8161/health"
+    api:
+      basePath: "/v1/warehouse/events"
+      style: REST
+    dependencies:
+      - service: data-lake-ingestion-service
+        env: DATA_LAKE_INGESTION_SERVICE_URL
+        url: "http://data-lake-ingestion-service:8160"
+    topicsProduced:
+      - warehouse.fact.loaded
+    topicsConsumed:
+      - data.lake.object.created
+  - name: risk-feature-store-service
+    domain: "Data And Analytics"
+    owner: "Data And Analytics Platform Team"
+    path: "data-platform/risk-feature-store-service"
+    port: 8162
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8162/health"
+    api:
+      basePath: "/v1/features/risk"
+      style: REST
+    dependencies:
+      - service: event-warehouse-service
+        env: EVENT_WAREHOUSE_SERVICE_URL
+        url: "http://event-warehouse-service:8161"
+    topicsProduced:
+      - risk.features.updated
+    topicsConsumed:
+      - warehouse.fact.loaded
+  - name: reporting-marts-service
+    domain: "Data And Analytics"
+    owner: "Data And Analytics Platform Team"
+    path: "data-platform/reporting-marts-service"
+    port: 8163
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8163/health"
+    api:
+      basePath: "/v1/reporting/marts"
+      style: REST
+    dependencies:
+      - service: event-warehouse-service
+        env: EVENT_WAREHOUSE_SERVICE_URL
+        url: "http://event-warehouse-service:8161"
+      - service: regulatory-reporting-service
+        env: REGULATORY_REPORTING_SERVICE_URL
+        url: "http://regulatory-reporting-service:8155"
+    topicsProduced:
+      - reporting.mart.refreshed
+    topicsConsumed:
+      - warehouse.fact.loaded
+      - regulatory.report.filed
+  - name: api-management-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/api-management-service"
+    port: 8170
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8170/health"
+    api:
+      basePath: "/v1/apis/routes"
+      style: REST
+    dependencies:
+      - service: config-service
+        env: CONFIG_SERVICE_URL
+        url: "http://config-service:8172"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - api.route.changed
+    topicsConsumed:
+      - config.policy.updated
+  - name: service-mesh-control-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/service-mesh-control-service"
+    port: 8171
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8171/health"
+    api:
+      basePath: "/v1/mesh/routes"
+      style: REST
+    dependencies:
+      - service: config-service
+        env: CONFIG_SERVICE_URL
+        url: "http://config-service:8172"
+      - service: observability-collector-service
+        env: OBSERVABILITY_COLLECTOR_SERVICE_URL
+        url: "http://observability-collector-service:8175"
+    topicsProduced:
+      - mesh.route.changed
+    topicsConsumed:
+      - api.route.changed
+  - name: config-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/config-service"
+    port: 8172
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8172/health"
+    api:
+      basePath: "/v1/config/policies"
+      style: REST
+    dependencies:
+      - service: secrets-broker-service
+        env: SECRETS_BROKER_SERVICE_URL
+        url: "http://secrets-broker-service:8173"
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - config.policy.updated
+    topicsConsumed:
+      - employee.access.granted
+  - name: secrets-broker-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/secrets-broker-service"
+    port: 8173
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8173/health"
+    api:
+      basePath: "/v1/secrets/leases"
+      style: REST
+    dependencies:
+      - service: audit-log-service
+        env: AUDIT_LOG_SERVICE_URL
+        url: "http://audit-log-service:8174"
+    topicsProduced:
+      - secret.lease.issued
+    topicsConsumed:
+      - config.policy.updated
+  - name: audit-log-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/audit-log-service"
+    port: 8174
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8174/health"
+    api:
+      basePath: "/v1/audit/events"
+      style: REST
+    dependencies:
+      - service: event-warehouse-service
+        env: EVENT_WAREHOUSE_SERVICE_URL
+        url: "http://event-warehouse-service:8161"
+    topicsProduced:
+      - audit.event.recorded
+    topicsConsumed:
+      - identity.login.succeeded
+      - ledger.entry.posted
+      - case.created
+  - name: observability-collector-service
+    domain: "Platform Services"
+    owner: "Platform Services Platform Team"
+    path: "platform-services/observability-collector-service"
+    port: 8175
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8175/health"
+    api:
+      basePath: "/v1/observability/signals"
+      style: REST
+    dependencies:
+      - service: event-warehouse-service
+        env: EVENT_WAREHOUSE_SERVICE_URL
+        url: "http://event-warehouse-service:8161"
+    topicsProduced:
+      - observability.signal.received
+    topicsConsumed:
+      - mesh.route.changed
+  - name: americas-routing-service
+    domain: "Regionalization"
+    owner: "Regionalization Platform Team"
+    path: "regions/americas-routing-service"
+    port: 8180
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8180/health"
+    api:
+      basePath: "/v1/regions/americas/routes"
+      style: REST
+    dependencies:
+      - service: ach-rail-service
+        env: ACH_RAIL_SERVICE_URL
+        url: "http://ach-rail-service:8140"
+      - service: rtp-rail-service
+        env: RTP_RAIL_SERVICE_URL
+        url: "http://rtp-rail-service:8142"
+      - service: card-authorization-service
+        env: CARD_AUTHORIZATION_SERVICE_URL
+        url: "http://card-authorization-service:8143"
+    topicsProduced:
+      - region.americas.routed
+    topicsConsumed:
+      - partner.request.received
+  - name: emea-routing-service
+    domain: "Regionalization"
+    owner: "Regionalization Platform Team"
+    path: "regions/emea-routing-service"
+    port: 8181
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8181/health"
+    api:
+      basePath: "/v1/regions/emea/routes"
+      style: REST
+    dependencies:
+      - service: sepa-rail-service
+        env: SEPA_RAIL_SERVICE_URL
+        url: "http://sepa-rail-service:8141"
+      - service: sanctions-screening-service
+        env: SANCTIONS_SCREENING_SERVICE_URL
+        url: "http://sanctions-screening-service:8151"
+      - service: swift-rail-service
+        env: SWIFT_RAIL_URL
+        url: "http://mock-swift-rail:9999"
+    topicsProduced:
+      - region.emea.routed
+    topicsConsumed:
+      - partner.request.received
+  - name: apac-routing-service
+    domain: "Regionalization"
+    owner: "Regionalization Platform Team"
+    path: "regions/apac-routing-service"
+    port: 8182
+    runtime: node-lightweight-fake-service
+    health: "http://localhost:8182/health"
+    api:
+      basePath: "/v1/regions/apac/routes"
+      style: REST
+    dependencies:
+      - service: swift-rail-service
+        env: SWIFT_RAIL_URL
+        url: "http://mock-swift-rail:9999"
+      - service: sanctions-screening-service
+        env: SANCTIONS_SCREENING_SERVICE_URL
+        url: "http://sanctions-screening-service:8151"
+      - service: rtp-rail-service
+        env: RTP_RAIL_SERVICE_URL
+        url: "http://rtp-rail-service:8142"
+    topicsProduced:
+      - region.apac.routed
+    topicsConsumed:
+      - partner.request.received

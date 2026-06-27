@@ -1,0 +1,35 @@
+{
+  "name": "americas-routing-service",
+  "title": "Americas Routing Service",
+  "domain": "Regionalization",
+  "port": 8180,
+  "endpoint": "/v1/regions/americas/routes",
+  "region": "americas",
+  "dependencies": [
+    {
+      "name": "ach-rail-service",
+      "env": "ACH_RAIL_SERVICE_URL",
+      "url": "http://ach-rail-service:8140"
+    },
+    {
+      "name": "rtp-rail-service",
+      "env": "RTP_RAIL_SERVICE_URL",
+      "url": "http://rtp-rail-service:8142"
+    },
+    {
+      "name": "card-authorization-service",
+      "env": "CARD_AUTHORIZATION_SERVICE_URL",
+      "url": "http://card-authorization-service:8143"
+    }
+  ],
+  "topicsProduced": [
+    "region.americas.routed"
+  ],
+  "topicsConsumed": [
+    "partner.request.received"
+  ],
+  "dataStores": [
+    "redis://redis:6379",
+    "kafka://kafka:29092"
+  ]
+}
