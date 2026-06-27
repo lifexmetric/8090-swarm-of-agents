@@ -370,18 +370,18 @@ function ExportPageContent() {
             </div>
           </div>
           <FileGroup icon={<FileText className="h-3 w-3" />} label="Overview">
-            {otherFiles.map(({ file, label }) => (
-              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
+            {otherFiles.map(({ file, label }, i) => (
+              <FileItem key={`${file.id}-${i}`} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
           <FileGroup icon={<Boxes className="h-3 w-3" />} label={`Nodes · ${nodeFiles.length}`}>
-            {nodeFiles.map(({ file, label }) => (
-              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
+            {nodeFiles.map(({ file, label }, i) => (
+              <FileItem key={`${file.id}-${i}`} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
           <FileGroup icon={<Share2 className="h-3 w-3" />} label={`Links · ${linkFiles.length}`}>
-            {linkFiles.map(({ file, label }) => (
-              <FileItem key={file.id} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
+            {linkFiles.map(({ file, label }, i) => (
+              <FileItem key={`${file.id}-${i}`} file={file} label={label} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
         </aside>

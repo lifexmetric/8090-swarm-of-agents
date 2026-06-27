@@ -534,8 +534,8 @@ export function NodeDocView({
             {deps
               .slice()
               .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard key={l.id} link={l} peer={nodeById(l.target, graph)} direction="out" onJump={onJumpToNode} />
+              .map((l, i) => (
+                <DepCard key={`${l.id}-out-${i}`} link={l} peer={nodeById(l.target, graph)} direction="out" onJump={onJumpToNode} />
               ))}
           </div>
         </div>
@@ -548,8 +548,8 @@ export function NodeDocView({
             {dependents
               .slice()
               .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard key={l.id} link={l} peer={nodeById(l.source, graph)} direction="in" onJump={onJumpToNode} />
+              .map((l, i) => (
+                <DepCard key={`${l.id}-in-${i}`} link={l} peer={nodeById(l.source, graph)} direction="in" onJump={onJumpToNode} />
               ))}
           </div>
         </div>
