@@ -18,7 +18,7 @@ func transferURL() string {
 	if baseURL == "" {
 		baseURL = "http://localhost:9999"
 	}
-	// THE CRITICAL PATH: changing /v2/transfers → /v3/transfers breaks all payments
+	// THE CRITICAL PATH: changing /v3/transfers → /v3/transfers breaks all payments
 	return baseURL + "/v3/transfers"
 }
 
