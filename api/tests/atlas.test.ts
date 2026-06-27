@@ -4,7 +4,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { buildChatContext, formatCitationList } from "../src/chat/context.js";
-import { buildChatPrompt, enforceEvidencePolicy, extractDurableMemoryFacts } from "../src/backboard/client.js";
+import {
+  buildChatDurableMemoryFacts,
+  buildChatPrompt,
+  enforceEvidencePolicy,
+  extractDurableMemoryFacts,
+} from "../src/backboard/client.js";
 import { AtlasRepository, migrate, openDatabase, type SqliteDatabase } from "../src/db/database.js";
 import { BackboardClient, buildDurableMemoryFacts } from "../src/backboard/client.js";
 import { buildWorkspaceGraph } from "../src/graph/workspace.js";
@@ -534,6 +539,26 @@ describe("handoff chat backend", () => {
     expect(facts[0]).toContain("queue-eventing");
   });
 
+  it("does not create durable memory facts from uncited answers or unknown citations", () => {
+    const context = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "What handoff risk matters?",
+      scanId: "scan_fixture",
+    });
+
+    expect(extractDurableMemoryFacts("The database module is risky for handoff.", context)).toHaveLength(0);
+    expect(extractDurableMemoryFacts("The database module is risky for handoff. [E999]", context)).toHaveLength(0);
+    expect(
+      buildChatDurableMemoryFacts({
+        workspaceId: "test",
+        sessionId: "chat_test",
+        content: "The database module is risky for handoff.",
+        context,
+      }),
+    ).toHaveLength(0);
+  });
+
   it("marks missing evidence answers uncertain instead of hallucinating", () => {
     const context: ChatContextBundle = {
       workspaceId: "test",
@@ -553,6 +578,22 @@ describe("handoff chat backend", () => {
     const answer = enforceEvidencePolicy("The migration owner is the platform team.", context);
     expect(answer).toContain("I do not have evidence for that in the scanned repos yet.");
     expect(answer).toContain("uncertain");
+  });
+
+  it("marks uncited Backboard answers as ungrounded instead of attaching supporting citations", () => {
+    const context = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "What should I know before changing this module?",
+      scanId: "scan_fixture",
+    });
+
+    const answer = enforceEvidencePolicy("The database module is the safest first change.", context);
+
+    expect(answer).toContain("did not cite specific evidence");
+    expect(answer).toContain("not supporting proof");
+    expect(answer).not.toContain("Supporting evidence:");
+    expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
   });
 
   it("serves the chat API routes with persisted assistant messages", async () => {
@@ -605,6 +646,110 @@ describe("handoff chat backend", () => {
     });
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json().messages).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("protects chat API routes when optional API auth is configured", async () => {
+    const backboard = new RecordingBackboard();
+    const authedConfig = loadConfig({
+      rootDir: tempDir,
+      databaseUrl: `file:${path.join(tempDir, "atlas.db")}`,
+      databasePath: path.join(tempDir, "atlas.db"),
+      workspaceId: "test",
+      backboardApiKey: "test",
+      apiAuthToken: "chat-secret",
+    });
+    const app = await buildApp({
+      config: authedConfig,
+      repository,
+      chatService: new ChatService(authedConfig, repository, backboard),
+    });
+    const auth = { authorization: "Bearer chat-secret" };
+
+    const missingSession = await app.inject({
+      method: "POST",
+      url: "/api/chat/sessions",
+      payload: { title: "Protected PR handoff" },
+    });
+    expect(missingSession.statusCode).toBe(401);
+
+    const invalidSession = await app.inject({
+      method: "POST",
+      url: "/api/chat/sessions",
+      headers: { authorization: "Bearer wrong" },
+      payload: { title: "Protected PR handoff" },
+    });
+    expect(invalidSession.statusCode).toBe(401);
+
+    const sessionResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat/sessions",
+      headers: auth,
+      payload: { title: "Protected PR handoff" },
+    });
+    expect(sessionResponse.statusCode).toBe(201);
+    const session = sessionResponse.json() as { id: string };
+
+    const missingGet = await app.inject({
+      method: "GET",
+      url: `/api/chat/sessions/${session.id}`,
+    });
+    expect(missingGet.statusCode).toBe(401);
+
+    const getSession = await app.inject({
+      method: "GET",
+      url: `/api/chat/sessions/${session.id}`,
+      headers: auth,
+    });
+    expect(getSession.statusCode).toBe(200);
+
+    const missingMessage = await app.inject({
+      method: "POST",
+      url: `/api/chat/sessions/${session.id}/messages`,
+      payload: {
+        content: "What should a new developer inspect before taking over?",
+        scanId: "scan_fixture",
+      },
+    });
+    expect(missingMessage.statusCode).toBe(401);
+
+    const messageResponse = await app.inject({
+      method: "POST",
+      url: `/api/chat/sessions/${session.id}/messages`,
+      headers: auth,
+      payload: {
+        content: "What should a new developer inspect before taking over?",
+        scanId: "scan_fixture",
+      },
+    });
+    expect(messageResponse.statusCode).toBe(201);
+
+    const missingMessages = await app.inject({
+      method: "GET",
+      url: `/api/chat/sessions/${session.id}/messages`,
+    });
+    expect(missingMessages.statusCode).toBe(401);
+
+    const listMessages = await app.inject({
+      method: "GET",
+      url: `/api/chat/sessions/${session.id}/messages`,
+      headers: auth,
+    });
+    expect(listMessages.statusCode).toBe(200);
+
+    const missingMemorySync = await app.inject({
+      method: "POST",
+      url: `/api/chat/sessions/${session.id}/memory-sync`,
+    });
+    expect(missingMemorySync.statusCode).toBe(401);
+
+    const memorySync = await app.inject({
+      method: "POST",
+      url: `/api/chat/sessions/${session.id}/memory-sync`,
+      headers: auth,
+    });
+    expect(memorySync.statusCode).toBe(202);
 
     await app.close();
   });

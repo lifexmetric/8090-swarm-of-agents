@@ -189,20 +189,20 @@ export async function buildApp(args: {
     };
   });
 
-  app.post("/api/chat/sessions", async (request, reply) => {
+  app.post("/api/chat/sessions", { preHandler: requireAuth }, async (request, reply) => {
     const parsed = createChatSessionSchema.parse(request.body);
     const session = await chatService.createSession(parsed);
     reply.status(201).send(session);
   });
 
-  app.get("/api/chat/sessions/:sessionId", async (request, reply) => {
+  app.get("/api/chat/sessions/:sessionId", { preHandler: requireAuth }, async (request, reply) => {
     const { sessionId } = chatSessionParamsSchema.parse(request.params);
     const session = chatService.getSession(sessionId);
     if (!session) return reply.status(404).send({ error: "Not Found", message: "Chat session not found" });
     return session;
   });
 
-  app.get("/api/chat/sessions/:sessionId/messages", async (request, reply) => {
+  app.get("/api/chat/sessions/:sessionId/messages", { preHandler: requireAuth }, async (request, reply) => {
     const { sessionId } = chatSessionParamsSchema.parse(request.params);
     const session = chatService.getSession(sessionId);
     if (!session) return reply.status(404).send({ error: "Not Found", message: "Chat session not found" });
@@ -212,14 +212,14 @@ export async function buildApp(args: {
     };
   });
 
-  app.post("/api/chat/sessions/:sessionId/messages", async (request, reply) => {
+  app.post("/api/chat/sessions/:sessionId/messages", { preHandler: requireAuth }, async (request, reply) => {
     const { sessionId } = chatSessionParamsSchema.parse(request.params);
     const parsed = createChatMessageSchema.parse(request.body);
     const result = await chatService.sendMessage(sessionId, parsed);
     reply.status(201).send(result);
   });
 
-  app.post("/api/chat/sessions/:sessionId/memory-sync", async (request, reply) => {
+  app.post("/api/chat/sessions/:sessionId/memory-sync", { preHandler: requireAuth }, async (request, reply) => {
     const { sessionId } = chatSessionParamsSchema.parse(request.params);
     const result = await chatService.syncMemory(sessionId);
     reply.status(202).send(result);

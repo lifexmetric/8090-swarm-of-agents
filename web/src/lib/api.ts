@@ -2,6 +2,7 @@ import type { Confidence, GraphData } from "./data";
 
 export const ATLAS_API_URL =
   process.env.NEXT_PUBLIC_ATLAS_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:3001";
+const ATLAS_API_AUTH_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
 
 export interface ScanRecord {
   id: string;
@@ -81,6 +82,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(ATLAS_API_AUTH_TOKEN ? { Authorization: `Bearer ${ATLAS_API_AUTH_TOKEN}` } : {}),
       ...(init?.headers ?? {}),
     },
   });

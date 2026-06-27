@@ -192,7 +192,11 @@ cd api
 npm run test:e2e
 ```
 
-The Playwright E2E suite starts the backend and frontend on isolated local
-ports, initializes SQLite, scans public repos, calls the real Backboard API,
-verifies stored handoff answers and memory behavior, and drives node and edge
-deep dives in the Explore UI.
+The Playwright config loads `.env` from the repository root and `api/.env`
+without printing secret values, so the command above uses the same documented
+environment path as local scans. The suite starts the backend and frontend on
+isolated local ports, enables the optional API bearer-token guard with a dummy
+E2E token, verifies missing/invalid auth rejection for scan and chat routes,
+initializes SQLite, scans public repos, calls the real Backboard API, verifies
+stored handoff answers and memory behavior, and drives node and edge deep dives
+in the Explore UI.

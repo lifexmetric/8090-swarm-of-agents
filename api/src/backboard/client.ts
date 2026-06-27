@@ -151,11 +151,10 @@ export function buildChatDurableMemoryFacts(args: {
   if (factTexts.length === 0 || args.context.evidence.length === 0) return [];
 
   const repoById = new Map(args.context.repositories.map((repo) => [repo.id, `${repo.owner}/${repo.name}`]));
-  return factTexts.flatMap((factText, index) => {
+  return factTexts.flatMap((factText) => {
     const citedIds = Array.from(factText.matchAll(/\[(E\d+)\]/g)).map((match) => match[1]);
-    const citations = citedIds.length > 0
-      ? args.context.evidence.filter((citation) => citedIds.includes(citation.id))
-      : [args.context.evidence[Math.min(index, args.context.evidence.length - 1)]];
+    if (citedIds.length === 0) return [];
+    const citations = args.context.evidence.filter((citation) => citedIds.includes(citation.id));
     const validCitations = citations.filter((citation) => citation?.filePath && citation.lineStart);
     if (validCitations.length === 0) return [];
 
@@ -546,15 +545,15 @@ export function enforceEvidencePolicy(content: string, context: ChatContextBundl
   }
   if (context.evidence.length > 0 && !hasCitation && !hasNoEvidence) {
     const citationIds = context.evidence.slice(0, 3).map((citation) => `[${citation.id}]`).join(" ");
-    trimmed = `${trimmed}\n\nSupporting evidence: ${citationIds}`;
-  }
-  if (context.weakEvidence && !/\b(inferred|uncertain|weak evidence)\b/i.test(trimmed)) {
+    trimmed = `${trimmed}\n\nConfidence: uncertain. Retrieved scan context exists, but this answer did not cite specific evidence, so treat architectural claims as ungrounded.`;
+    trimmed = `${trimmed}\n\nRetrieved context to inspect, not supporting proof for the answer: ${citationIds}.`;
+  } else if (context.weakEvidence && !/\b(inferred|uncertain|weak evidence)\b/i.test(trimmed)) {
     trimmed = `${trimmed}\n\nConfidence: inferred from limited evidence.`;
   }
-  if (context.evidence.length > 0 && !/\bconfidence\b/i.test(trimmed)) {
+  if (context.evidence.length > 0 && hasCitation && !/\bconfidence\b/i.test(trimmed)) {
     trimmed = `${trimmed}\n\nConfidence: ${context.weakEvidence ? "inferred from limited evidence" : "confirmed by retrieved scan evidence"}.`;
   }
-  const firstCitation = context.evidence[0] ? `[${context.evidence[0].id}]` : "";
+  const firstCitation = hasCitation && context.evidence[0] ? `[${context.evidence[0].id}]` : "";
   if (context.selected?.type === "node" && !/\bRelated nodes\/edges\b/i.test(trimmed)) {
     const node = context.nodes.find((item) => item.id === context.selected?.id);
     if (node) {
@@ -572,34 +571,22 @@ export function enforceEvidencePolicy(content: string, context: ChatContextBundl
 
 export function extractDurableMemoryFacts(content: string, context: ChatContextBundle): string[] {
   if (context.evidence.length === 0) return [];
+  const knownCitationIds = new Set(context.evidence.map((citation) => citation.id));
   const lines = content
     .split(/\r?\n/)
     .map((line) => line.replace(/^[-*]\s*/, "").trim())
     .filter(Boolean);
   const architectureWords = /(service|module|repo|repository|api|queue|topic|database|db|dependency|depends|calls|imports|edge|connection|risk|before you change|contract)/i;
-  const unsupportedWords = /(do not have evidence|uncertain|weak evidence|guess|speculat|no evidence|unsupported)/i;
+  const unsupportedWords = /(do not have evidence|uncertain|weak evidence|guess|speculat|no evidence|unsupported|ungrounded|retrieved context|not supporting proof|related nodes\/edges)/i;
   const facts: string[] = [];
   for (const line of lines) {
     if (!architectureWords.test(line)) continue;
     if (unsupportedWords.test(line)) continue;
-    if (!/\[E\d+\]/.test(line)) continue;
+    const citedIds = Array.from(line.matchAll(/\[(E\d+)\]/g)).map((match) => match[1]);
+    if (citedIds.length === 0) continue;
+    if (citedIds.some((citationId) => !knownCitationIds.has(citationId))) continue;
     facts.push(redactSecrets(line).slice(0, 700));
     if (facts.length >= 5) break;
-  }
-  if (facts.length === 0) {
-    const firstEvidence = context.evidence[0];
-    const node = context.nodes.find((item) => item.confidence === "confirmed") ?? context.nodes[0];
-    if (node && firstEvidence) {
-      facts.push(
-        `Confirmed handoff fact: ${node.label} is a ${node.kind} node in the scanned system; takeover work should inspect its evidence before changing it. [${firstEvidence.id}]`,
-      );
-    }
-    const edge = context.edges.find((item) => item.confidence === "confirmed") ?? context.edges[0];
-    if (edge && firstEvidence && facts.length < 2) {
-      facts.push(
-        `Confirmed handoff fact: ${edge.source} connects to ${edge.target} through a ${edge.kind} edge; takeover work should verify this contract before changing related code. [${firstEvidence.id}]`,
-      );
-    }
   }
   return facts;
 }

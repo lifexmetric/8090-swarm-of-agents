@@ -2,6 +2,8 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 const apiUrl = process.env.ATLAS_E2E_API_URL ?? "http://127.0.0.1:3001";
 const workspaceId = process.env.ATLAS_E2E_WORKSPACE_ID ?? "e2e-handoff";
+const apiAuthToken = process.env.ATLAS_E2E_API_AUTH_TOKEN ?? "atlas-e2e-local-token";
+const authHeaders = { Authorization: `Bearer ${apiAuthToken}` };
 const repos = [
   "https://github.com/fastify/fastify-plugin",
   "https://github.com/fastify/fastify-autoload",
@@ -68,13 +70,13 @@ test.beforeEach(() => {
 });
 
 async function apiGet<T>(request: APIRequestContext, path: string): Promise<T> {
-  const response = await request.get(`${apiUrl}${path}`);
+  const response = await request.get(`${apiUrl}${path}`, { headers: authHeaders });
   expect(response.ok()).toBeTruthy();
   return response.json() as Promise<T>;
 }
 
 async function apiPost<T>(request: APIRequestContext, path: string, payload: unknown): Promise<T> {
-  const response = await request.post(`${apiUrl}${path}`, { data: payload });
+  const response = await request.post(`${apiUrl}${path}`, { data: payload, headers: authHeaders });
   expect(response.ok()).toBeTruthy();
   return response.json() as Promise<T>;
 }
@@ -126,7 +128,23 @@ test("1. backend health initializes SQLite and reports Backboard configuration",
   expect(health.backboardConfigured).toBe(true);
 });
 
-test("2. real scan prerequisite returns graph nodes, edges, and evidence", async ({ request }) => {
+test("2. protected API mode rejects missing or invalid auth for scan and chat routes", async () => {
+  const missingScan = await fetch(`${apiUrl}/api/scans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repoUrl: repos[0], workspaceId }),
+  });
+  expect(missingScan.status).toBe(401);
+
+  const invalidChat = await fetch(`${apiUrl}/api/chat/sessions`, {
+    method: "POST",
+    headers: { Authorization: "Bearer invalid-e2e-token", "Content-Type": "application/json" },
+    body: JSON.stringify({ workspaceId, title: "Invalid auth" }),
+  });
+  expect(invalidChat.status).toBe(401);
+});
+
+test("3. real scan prerequisite returns graph nodes, edges, and evidence", async ({ request }) => {
   test.setTimeout(420_000);
   primaryScan = await scanRepo(request, repos[0]);
   primaryGraph = await apiGet<GraphData>(request, `/api/scans/${encodeURIComponent(primaryScan.id)}/graph`);
@@ -141,7 +159,7 @@ test("2. real scan prerequisite returns graph nodes, edges, and evidence", async
   ].length).toBeGreaterThan(0);
 });
 
-test("3. real Backboard handoff chat stores an evidence-backed answer", async ({ request }) => {
+test("4. real Backboard handoff chat stores an evidence-backed answer", async ({ request }) => {
   firstSession = await apiPost<ChatSession>(request, "/api/chat/sessions", {
     workspaceId,
     title: "E2E unfinished PR handoff",
@@ -166,7 +184,7 @@ test("3. real Backboard handoff chat stores an evidence-backed answer", async ({
   expect(stored.messages.some((message) => message.content === firstAssistantMessage.content)).toBe(true);
 });
 
-test("4. UI node deep dive answers what to inspect before changing a selected node", async ({ page }) => {
+test("5. UI node deep dive answers what to inspect before changing a selected node", async ({ page }) => {
   await openRealExplore(page);
   const nodeLocator = page.getByTestId("graph-node").first();
   const nodeText = (await nodeLocator.textContent()) ?? "selected node";
@@ -181,7 +199,7 @@ test("4. UI node deep dive answers what to inspect before changing a selected no
   await expect(answer).toContainText(/Confidence|evidence|\[E\d+\]/i);
 });
 
-test("5. UI edge deep dive answers connection risk with evidence", async ({ page }) => {
+test("6. UI edge deep dive answers connection risk with evidence", async ({ page }) => {
   await openRealExplore(page);
   await expect(page.getByTestId("graph-edge").first()).toBeAttached({ timeout: 60_000 });
   const edgeLocator = page.getByTestId("graph-edge").first();
@@ -198,7 +216,7 @@ test("5. UI edge deep dive answers connection risk with evidence", async ({ page
   await expect(answer).toContainText(/Confidence|evidence|\[E\d+\]/i);
 });
 
-test("6. memory behavior reuses assistant id across handoff sessions", async ({ request }) => {
+test("7. memory behavior reuses assistant id across handoff sessions", async ({ request }) => {
   expect(firstAssistantMessage.memoryOperationId).toBeTruthy();
 
   secondSession = await apiPost<ChatSession>(request, "/api/chat/sessions", {
@@ -217,7 +235,7 @@ test("6. memory behavior reuses assistant id across handoff sessions", async ({ 
   expect(result.assistantMessage.content).toMatch(/inspect|component|handoff|evidence|I do not have evidence/i);
 });
 
-test("7. organization graph behavior explains repo connections or lack of evidence", async ({ request }) => {
+test("8. organization graph behavior explains repo connections or lack of evidence", async ({ request }) => {
   test.setTimeout(420_000);
   secondaryScan = await scanRepo(request, repos[1]);
   workspaceGraph = await apiGet<GraphData>(request, `/api/workspaces/${encodeURIComponent(workspaceId)}/graph`);
