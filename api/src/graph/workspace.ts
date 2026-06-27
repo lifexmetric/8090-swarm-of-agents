@@ -1,8 +1,46 @@
-import type { Evidence, GraphData, GraphLink, RepositoryRecord, ScanRecord, WorkspaceGraph } from "../types/domain.js";
+import type { Evidence, GraphData, GraphLink, GraphNode, RepositoryRecord, ScanRecord, WorkspaceGraph } from "../types/domain.js";
 import { stableId } from "../util/ids.js";
+
+function systemNodeId(repo: RepositoryRecord): string {
+  return stableId("system", repo.id);
+}
 
 function repoRootNodeId(graph: GraphData, repo: RepositoryRecord): string | null {
   return graph.nodes.find((node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`)?.id ?? null;
+}
+
+function repoRootNode(graph: GraphData, repo: RepositoryRecord): GraphNode | undefined {
+  return graph.nodes.find((node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`);
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function systemNodeFromScan(repo: RepositoryRecord, scan: ScanRecord): GraphNode | null {
+  if (!scan.graph) return null;
+  const root = repoRootNode(scan.graph, repo);
+  const risks = unique(scan.graph.nodes.flatMap((node) => node.risks)).slice(0, 8);
+  const owns = unique([
+    ...(repo.packageName ? [repo.packageName] : []),
+    ...(root?.owns ?? []),
+  ]);
+
+  return {
+    id: systemNodeId(repo),
+    label: `${repo.owner}/${repo.name}`,
+    kind: "service",
+    domain: "System",
+    whatItIs: root?.whatItIs ?? `${repo.owner}/${repo.name} is a scanned repository in this workspace.`,
+    whyItExists: root?.whyItExists ?? "Represents one deployable or package-level system in the architecture map.",
+    owns,
+    confidence: root?.confidence ?? "confirmed",
+    risks,
+    path: ".",
+    repositoryId: repo.id,
+    scanId: scan.id,
+    evidence: root?.evidence ?? [],
+  };
 }
 
 function evidenceForPackageDependency(graph: GraphData, packageName: string): Evidence[] {
@@ -26,12 +64,20 @@ export function buildWorkspaceGraph(args: {
   scans: ScanRecord[];
 }): WorkspaceGraph {
   const graphs = args.scans.flatMap((scan) => (scan.graph ? [scan.graph] : []));
-  const nodes = graphs.flatMap((graph) => graph.nodes);
-  const links: GraphLink[] = graphs.flatMap((graph) => graph.links);
+  const nodes: GraphNode[] = [];
+  const links: GraphLink[] = [];
   const repoById = new Map(args.repositories.map((repo) => [repo.id, repo]));
   const graphByRepoId = new Map<string, GraphData>();
+  const systemNodeByRepoId = new Map<string, GraphNode>();
   for (const scan of args.scans) {
-    if (scan.graph) graphByRepoId.set(scan.repositoryId, scan.graph);
+    if (!scan.graph) continue;
+    graphByRepoId.set(scan.repositoryId, scan.graph);
+    const repo = repoById.get(scan.repositoryId);
+    if (!repo) continue;
+    const systemNode = systemNodeFromScan(repo, scan);
+    if (!systemNode) continue;
+    nodes.push(systemNode);
+    systemNodeByRepoId.set(repo.id, systemNode);
   }
 
   const producedByPackage = new Map<string, RepositoryRecord>();
@@ -57,6 +103,9 @@ export function buildWorkspaceGraph(args: {
       const targetGraph = graphByRepoId.get(targetRepo.id);
       const targetRoot = targetGraph ? repoRootNodeId(targetGraph, targetRepo) : null;
       if (!sourceRoot || !targetRoot) continue;
+      const sourceSystem = systemNodeByRepoId.get(sourceRepo.id);
+      const targetSystem = systemNodeByRepoId.get(targetRepo.id);
+      if (!sourceSystem || !targetSystem) continue;
 
       const sourceEvidence = evidenceForPackageDependency(graph, packageName);
       const targetEvidence = targetGraph ? evidenceForProducedPackage(targetGraph, targetRepo, packageName) : [];
@@ -77,8 +126,8 @@ export function buildWorkspaceGraph(args: {
 
       links.push({
         id,
-        source: sourceRoot,
-        target: targetRoot,
+        source: sourceSystem.id,
+        target: targetSystem.id,
         kind: "config",
         criticality: 3,
         summary: `${sourceRepo.owner}/${sourceRepo.name} depends on package ${packageName} from ${targetRepo.owner}/${targetRepo.name}.`,

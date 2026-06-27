@@ -3,6 +3,9 @@ import type { GraphData } from "./data";
 export const ATLAS_API_URL =
   process.env.NEXT_PUBLIC_ATLAS_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:3001";
 
+export const ATLAS_WORKSPACE_ID =
+  process.env.NEXT_PUBLIC_ATLAS_WORKSPACE_ID?.trim() || "default";
+
 export interface ScanRecord {
   id: string;
   workspaceId: string;
@@ -17,6 +20,32 @@ export interface ScanRecord {
   backboardAssistantId?: string | null;
   backboardThreadId?: string | null;
   backboardRunId?: string | null;
+}
+
+export interface RepositoryRecord {
+  id: string;
+  workspaceId: string;
+  owner: string;
+  name: string;
+  url: string;
+  cloneUrl: string;
+  packageName?: string | null;
+  lastCommitSha?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceGraph extends GraphData {
+  workspaceId: string;
+  repositories: RepositoryRecord[];
+  crossRepoConnections: Array<{
+    id: string;
+    sourceRepositoryId: string;
+    targetRepositoryId: string;
+    sourcePackage: string;
+    targetPackage: string;
+    summary: string;
+  }>;
 }
 
 export interface ScanEvent {
@@ -66,6 +95,10 @@ export function getScanEvents(scanId: string): Promise<{ scanId: string; events:
 
 export function getScanGraph(scanId: string): Promise<GraphData> {
   return apiJson<GraphData>(`/api/scans/${encodeURIComponent(scanId)}/graph`);
+}
+
+export function getWorkspaceGraph(workspaceId = ATLAS_WORKSPACE_ID): Promise<WorkspaceGraph> {
+  return apiJson<WorkspaceGraph>(`/api/workspaces/${encodeURIComponent(workspaceId)}/graph`);
 }
 
 export function getScanExport(scanId: string): Promise<ExportResponse> {

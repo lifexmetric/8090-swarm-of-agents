@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { SCAN_FEED } from "@/lib/data";
 import { getScan, getScanEvents, type ScanEvent } from "@/lib/api";
 
 const TONE_COLOR: Record<string, string> = {
@@ -19,23 +18,14 @@ function toneForEvent(event: ScanEvent): "info" | "find" | "warn" {
 
 export function ScanOverlay({ repo, scanId }: { repo: string; scanId?: string | null }) {
   const router = useRouter();
-  const [visible, setVisible] = React.useState(0);
   const [events, setEvents] = React.useState<ScanEvent[]>([]);
-  const [status, setStatus] = React.useState<"mock" | "queued" | "running" | "completed" | "failed">(
-    scanId ? "queued" : "mock",
+  const [status, setStatus] = React.useState<"queued" | "running" | "completed" | "failed">(
+    scanId ? "queued" : "failed",
   );
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(
+    scanId ? null : "Scan was not created. Check the API connection and try again.",
+  );
   const feedRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (scanId) return;
-    if (visible >= SCAN_FEED.length) {
-      const done = setTimeout(() => router.push("/explore"), 700);
-      return () => clearTimeout(done);
-    }
-    const t = setTimeout(() => setVisible((v) => v + 1), 380);
-    return () => clearTimeout(t);
-  }, [visible, router, scanId]);
 
   React.useEffect(() => {
     if (!scanId) return;
@@ -49,7 +39,7 @@ export function ScanOverlay({ repo, scanId }: { repo: string; scanId?: string | 
         setStatus(scan.status);
         setEvents(eventResponse.events);
         if (scan.status === "completed") {
-          setTimeout(() => router.push(`/explore?scanId=${encodeURIComponent(scanId!)}`), 700);
+          setTimeout(() => router.push("/explore"), 700);
           return;
         }
         if (scan.status === "failed") {
@@ -74,18 +64,13 @@ export function ScanOverlay({ repo, scanId }: { repo: string; scanId?: string | 
 
   React.useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
-  }, [events, visible]);
+  }, [events]);
 
-  const usingBackend = Boolean(scanId);
-  const feed = usingBackend
-    ? events.map((event) => ({ text: event.message, tone: toneForEvent(event) }))
-    : SCAN_FEED.slice(0, visible);
-  const progress = usingBackend
-    ? status === "completed"
-      ? 100
-      : Math.min(95, Math.max(8, events.length * 12))
-    : Math.min(100, Math.round((visible / SCAN_FEED.length) * 100));
-  const finished = usingBackend ? status === "completed" : visible >= SCAN_FEED.length;
+  const feed = events.map((event) => ({ text: event.message, tone: toneForEvent(event) }));
+  const progress = status === "completed"
+    ? 100
+    : Math.min(95, Math.max(8, events.length * 12));
+  const finished = status === "completed";
   const failed = status === "failed";
 
   return (

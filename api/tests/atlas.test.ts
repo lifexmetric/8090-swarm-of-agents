@@ -380,9 +380,14 @@ describe("workspace graph merge", () => {
     });
 
     expect(workspace.crossRepoConnections).toHaveLength(1);
+    expect(workspace.nodes).toHaveLength(2);
+    expect(workspace.nodes.every((node) => node.domain === "System")).toBe(true);
     expect(workspace.crossRepoConnections[0].sourceEvidence.every((item) => item.detector === "package-json-dependency")).toBe(true);
     expect(workspace.crossRepoConnections[0].targetEvidence.every((item) => item.detector === "package-json-name")).toBe(true);
-    expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(true);
+    const crossRepoLink = workspace.links.find((link) => link.contract.includes("Cross-repo package relationship"));
+    expect(crossRepoLink).toBeDefined();
+    expect(workspace.nodes.some((node) => node.id === crossRepoLink?.source)).toBe(true);
+    expect(workspace.nodes.some((node) => node.id === crossRepoLink?.target)).toBe(true);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
@@ -430,6 +435,8 @@ describe("workspace graph merge", () => {
     });
 
     expect(workspace.crossRepoConnections).toHaveLength(0);
+    expect(workspace.nodes).toHaveLength(2);
+    expect(workspace.nodes.every((node) => node.domain === "System")).toBe(true);
     expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(false);
   });
 });
