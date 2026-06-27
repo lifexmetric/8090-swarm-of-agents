@@ -94,6 +94,7 @@ export function LinkPanel({
             <Tag color={meta.color}>{meta.label}</Tag>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
             className="cursor-pointer p-1 text-faint transition-colors duration-150 hover:text-ink"
@@ -105,8 +106,10 @@ export function LinkPanel({
         {/* Source → Target */}
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => source && onSelectNode(source.id)}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border border-line bg-bg px-2.5 py-2 text-left transition-colors duration-150 hover:border-line-2"
+            disabled={!source}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border border-line bg-bg px-2.5 py-2 text-left transition-colors duration-150 hover:border-line-2 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {source && SourceIcon && (
               <SourceIcon className="h-3.5 w-3.5 shrink-0" style={{ color: NODE_KIND_META[source.kind].color }} />
@@ -115,8 +118,10 @@ export function LinkPanel({
           </button>
           <ArrowRight className="h-3.5 w-3.5 shrink-0 text-faint" />
           <button
+            type="button"
             onClick={() => target && onSelectNode(target.id)}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border border-line bg-bg px-2.5 py-2 text-left transition-colors duration-150 hover:border-line-2"
+            disabled={!target}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border border-line bg-bg px-2.5 py-2 text-left transition-colors duration-150 hover:border-line-2 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {target && TargetIcon && (
               <TargetIcon className="h-3.5 w-3.5 shrink-0" style={{ color: NODE_KIND_META[target.kind].color }} />
@@ -275,6 +280,7 @@ export function LinkPanel({
       {/* Footer */}
       <div className="border-t border-line p-3">
         <button
+          type="button"
           onClick={copy}
           className="flex w-full cursor-pointer items-center justify-center gap-2 bg-inverse py-2 text-[13px] font-semibold text-inverse-fg transition-opacity duration-150 hover:opacity-90"
         >

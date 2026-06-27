@@ -26,6 +26,7 @@ function ConnRow({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex w-full cursor-pointer items-center gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface"
     >
@@ -122,6 +123,7 @@ export function NodePanel({
       {nodeHistory.length > 0 && (
         <div className="flex items-center gap-1 border-b border-line bg-bg px-3 py-1.5">
           <button
+            type="button"
             onClick={onGoBack}
             className="flex cursor-pointer items-center gap-1 text-[11px] text-faint transition-colors duration-150 hover:text-muted"
           >
@@ -165,6 +167,7 @@ export function NodePanel({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
             className="cursor-pointer p-1 text-faint transition-colors duration-150 hover:text-ink"
@@ -183,6 +186,7 @@ export function NodePanel({
       {/* ── Tab bar ── */}
       <div className="flex border-b border-line bg-bg">
         <button
+          type="button"
           onClick={() => onViewChange("overview")}
           className={cn(
             "flex flex-1 cursor-pointer items-center justify-center gap-1.5 py-2 text-[12px] font-medium transition-colors duration-150",
@@ -196,6 +200,7 @@ export function NodePanel({
           Overview
         </button>
         <button
+          type="button"
           onClick={() => onViewChange("subgraph")}
           disabled={!hasConnections}
           className={cn(
@@ -285,6 +290,7 @@ export function NodePanel({
                     return (
                       <div key={c.link.id} className="overflow-hidden rounded-md border border-line">
                         <button
+                          type="button"
                           onClick={() => onSelectLink(c.link.id)}
                           className="flex w-full cursor-pointer items-center gap-1.5 border-b border-line bg-bg px-2.5 py-1.5 text-left transition-colors duration-150 hover:bg-surface"
                         >
@@ -339,6 +345,7 @@ export function NodePanel({
                 <SectionLabel>Depends on · {deps.length}</SectionLabel>
                 {deps.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => onViewChange("subgraph")}
                     className="flex cursor-pointer items-center gap-1 rounded-md border border-line bg-bg px-2 py-0.5 font-mono text-[10px] text-faint transition-colors duration-150 hover:border-line-2 hover:text-muted"
                   >
@@ -424,6 +431,7 @@ export function NodePanel({
             {/* Drill-down prompt when connections exist */}
             {hasConnections && (
               <button
+                type="button"
                 onClick={() => onViewChange("subgraph")}
                 className="flex w-full cursor-pointer items-center justify-center gap-2 border border-dashed border-line py-3 text-[12px] text-faint transition-colors duration-150 hover:border-line-2 hover:text-muted"
               >
@@ -486,6 +494,7 @@ export function NodePanel({
       {/* ── Footer ── */}
       <div className="flex items-center gap-2 border-t border-line p-3">
         <button
+          type="button"
           onClick={onFocus}
           className="flex flex-1 cursor-pointer items-center justify-center gap-2 border border-line bg-bg py-2 text-[13px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
         >
@@ -493,6 +502,7 @@ export function NodePanel({
           Focus
         </button>
         <button
+          type="button"
           onClick={copy}
           className="flex flex-1 cursor-pointer items-center justify-center gap-2 bg-inverse py-2 text-[13px] font-semibold text-inverse-fg transition-opacity duration-150 hover:opacity-90"
         >

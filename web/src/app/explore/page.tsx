@@ -13,7 +13,6 @@ import {
   Plus,
   Minus,
   MessageSquare,
-  GitMerge,
   GitBranch,
   FolderTree,
   ChevronRight,
@@ -52,14 +51,6 @@ import { NODE_ICON } from "@/components/icons";
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
 const EMPTY_GRAPH: GraphData = { nodes: [], links: [] };
 
-const CRITICAL_PATH_NODE_IDS = new Set([
-  "api-gateway",
-  "orders-module",
-  "rabbitmq",
-  "payments-service",
-  "rbc-rail-adapter",
-]);
-
 export default function ExplorePage() {
   return (
     <React.Suspense fallback={<main className="h-screen w-screen bg-bg" />}>
@@ -81,7 +72,6 @@ function ExplorePageContent() {
   const [query, setQuery] = React.useState("");
   const [activeKinds, setActiveKinds] = React.useState<Set<NodeKind>>(new Set(ALL_KINDS));
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
-  const [criticalPathMode, setCriticalPathMode] = React.useState(false);
   const [layoutMode, setLayoutMode] = React.useState<LayoutMode>("hierarchy");
   const [systemScopeState, setSystemScopeState] = React.useState<{
     graphKey: string | null;
@@ -198,37 +188,13 @@ function ExplorePageContent() {
     setSystemScopeState({ graphKey, scope: { repositoryId: scope.repositoryId ?? null, path: scope.path ?? "" } });
     setSelectedNodeId(null);
     setSelectedLinkId(null);
-    setCriticalPathMode(false);
     setNodeHistory([]);
     setPanelView("overview");
   }, [graphKey]);
 
-  const criticalPathNodeIds = React.useMemo(() => {
-    const demoNodesPresent = [...CRITICAL_PATH_NODE_IDS].every((id) =>
-      viewGraph.nodes.some((node) => node.id === id),
-    );
-    if (demoNodesPresent) return CRITICAL_PATH_NODE_IDS;
-    return new Set(
-      viewGraph.links
-        .filter((link) => link.criticality >= 5)
-        .flatMap((link) => [link.source, link.target]),
-    );
-  }, [viewGraph]);
-
-  const criticalPathLinkIds = React.useMemo(
-    () =>
-      new Set(
-        viewGraph.links
-          .filter((link) => criticalPathNodeIds.has(link.source) && criticalPathNodeIds.has(link.target))
-          .map((link) => link.id),
-      ),
-    [criticalPathNodeIds, viewGraph.links],
-  );
-
   const selectNode = React.useCallback((id: string) => {
     setNodeHistory([]);
     setPanelView("overview");
-    setCriticalPathMode(false);
     if (!id) {
       setSelectedNodeId(null);
       setSelectedLinkId(null);
@@ -248,7 +214,6 @@ function ExplorePageContent() {
     });
     setPanelView("subgraph");
     setSelectedLinkId(null);
-    setCriticalPathMode(false);
   }, [viewGraph]);
 
   const goBack = React.useCallback(() => {
@@ -276,7 +241,6 @@ function ExplorePageContent() {
 
       setNodeHistory([]);
       setPanelView("overview");
-      setCriticalPathMode(false);
       setSelectedLinkId(null);
       setSelectedNodeId(null);
 
@@ -296,13 +260,11 @@ function ExplorePageContent() {
       setNodeHistory([]);
       setSelectedLinkId(null);
       setSelectedNodeId(null);
-      setCriticalPathMode(false);
       router.push(`/explore?scanId=${encodeURIComponent(sourceNode.scanId)}&view=detail`);
       return;
     }
 
     setNodeHistory([]);
-    setCriticalPathMode(false);
     setSelectedLinkId(null);
     setSelectedNodeId(id);
     setPanelView("subgraph");
@@ -310,7 +272,6 @@ function ExplorePageContent() {
   }, [graph, graphKey, isSystemDetail, layoutMode, router, viewGraph]);
 
   const selectLink = React.useCallback((id: string) => {
-    setCriticalPathMode(false);
     setSelectedNodeId(null);
     setSelectedLinkId(id);
   }, []);
@@ -404,9 +365,6 @@ function ExplorePageContent() {
           onSelectNode={selectNode}
           onSelectLink={selectLink}
           onDoubleClickNode={handleDoubleClickNode}
-          criticalPathMode={criticalPathMode}
-          criticalPathNodeIds={criticalPathNodeIds}
-          criticalPathLinkIds={criticalPathLinkIds}
           layoutMode={layoutMode}
         />
       </div>
@@ -475,13 +433,14 @@ function ExplorePageContent() {
                   className="w-full min-w-0 bg-transparent py-1.5 pr-2 text-[13px] text-ink placeholder:text-faint focus:outline-none sm:w-48"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-faint hover:text-muted">
+                  <button type="button" onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-faint hover:text-muted">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
               <div className="hidden rounded-lg border border-line bg-surface sm:flex">
                 <button
+                  type="button"
                   onClick={() => graphRef.current?.zoomOut()}
                   aria-label="Zoom out"
                   className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
@@ -489,6 +448,7 @@ function ExplorePageContent() {
                   <Minus className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => graphRef.current?.zoomIn()}
                   aria-label="Zoom in"
                   className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
@@ -496,6 +456,7 @@ function ExplorePageContent() {
                   <Plus className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => { selectNode(""); graphRef.current?.resetView(); }}
                   aria-label="Reset zoom"
                   className="flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[13px] text-muted transition-colors duration-150 hover:text-ink"
@@ -509,6 +470,7 @@ function ExplorePageContent() {
                 title="Switch graph layout"
               >
                 <button
+                  type="button"
                   onClick={() => setLayoutMode("hierarchy")}
                   aria-label="Hierarchy layout"
                   className={cn(
@@ -522,6 +484,7 @@ function ExplorePageContent() {
                   <span className="hidden md:inline">{graph.nodes.length > 35 ? "Bands" : "Hierarchy"}</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setLayoutMode("system")}
                   aria-label="System view"
                   className={cn(
@@ -572,6 +535,7 @@ function ExplorePageContent() {
               const on = activeKinds.has(k);
               return (
                 <button
+                  type="button"
                   key={k}
                   onClick={() => toggleKind(k)}
                   className={cn(
@@ -589,6 +553,7 @@ function ExplorePageContent() {
             })}
             <div className="h-4 w-px shrink-0 bg-line" />
             <button
+              type="button"
               onClick={() => setHighRiskOnly((v) => !v)}
               className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
@@ -600,23 +565,6 @@ function ExplorePageContent() {
               <ShieldAlert className="h-3 w-3" />
               High-risk · {highRiskCount}
             </button>
-            <button
-              onClick={() => {
-                setCriticalPathMode((v) => !v);
-                setSelectedNodeId(null);
-                setSelectedLinkId(null);
-              }}
-              className={cn(
-                "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
-                criticalPathMode
-                  ? "border-err/40 bg-err/10 text-err"
-                  : "border-line text-faint hover:text-muted",
-              )}
-              title="Highlight the critical path through the system"
-            >
-              <GitMerge className="h-3 w-3" />
-              Critical path
-            </button>
           </div>
         </div>
 
@@ -624,6 +572,7 @@ function ExplorePageContent() {
           <div className="pointer-events-auto border-b border-line bg-bg/80 backdrop-blur-sm">
             <div className="mx-auto flex h-9 max-w-[1600px] items-center gap-2 overflow-x-auto px-4">
               <button
+                type="button"
                 onClick={() => systemParent && goToSystemScope(systemParent)}
                 disabled={!systemParent}
                 className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[12px] text-muted transition-colors duration-150 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
@@ -637,6 +586,7 @@ function ExplorePageContent() {
                   <React.Fragment key={`${crumb.scope.repositoryId ?? "workspace"}:${crumb.scope.path ?? ""}:${index}`}>
                     {index > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-faint" />}
                     <button
+                      type="button"
                       onClick={() => goToSystemScope(crumb.scope)}
                       className={cn(
                         "max-w-[180px] shrink-0 truncate rounded-md px-2 py-1 font-mono text-[11px] transition-colors duration-150",
@@ -665,6 +615,7 @@ function ExplorePageContent() {
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Groups</p>
               <button
+                type="button"
                 onClick={() => setGroupsOpen(false)}
                 className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-line text-faint transition-colors duration-150 hover:text-ink"
                 aria-label="Hide groups panel"
@@ -718,6 +669,7 @@ function ExplorePageContent() {
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setGroupsOpen(true)}
             className="pointer-events-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-bg/90 px-2 py-1.5 font-mono text-[11px] text-muted backdrop-blur-sm transition-colors duration-150 hover:text-ink"
             aria-label="Show groups panel"
@@ -732,10 +684,8 @@ function ExplorePageContent() {
       {!panelOpen && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
           <div className="rounded-lg border border-line bg-bg/80 px-3.5 py-2 font-mono text-[12px] text-faint backdrop-blur-sm">
-            {criticalPathMode
-              ? "Critical path highlighted · click any node to explore · Esc to clear"
-              : layoutMode === "system"
-                ? "System view · double-click folders/files to enter · use breadcrumb to go back"
+            {layoutMode === "system"
+              ? "System view · double-click folders/files to enter · use breadcrumb to go back"
               : selectedNodeId
                 ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
                 : "Top-down flow · drag to pan · scroll to zoom · click any node"}
@@ -752,7 +702,8 @@ function ExplorePageContent() {
             {[
               { label: "Nodes", value: filtered.nodes.length },
               { label: "Edges", value: filtered.links.length },
-              { label: "External", value: filtered.nodes.filter((n) => n.kind === "external").length },
+              { label: "External Deps", value: filtered.nodes.filter((n) => n.kind === "external").length },
+              { label: "Auth", value: filtered.nodes.filter((n) => n.kind === "auth").length },
             ].map((s) => (
               <div key={s.label}>
                 <p className="font-mono text-xl font-semibold tabular-nums text-ink">{s.value}</p>
@@ -760,11 +711,6 @@ function ExplorePageContent() {
               </div>
             ))}
           </div>
-          {criticalPathMode && (
-            <p className="mt-2 font-mono text-[10px] text-err">
-              Critical path active
-            </p>
-          )}
         </div>
       </div>
 

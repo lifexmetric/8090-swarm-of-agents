@@ -392,8 +392,10 @@ export function SubGraph({ node, graphData, onSelectNode }: SubGraphProps) {
             return (
               <button
                 key={link.id}
+                type="button"
                 onClick={() => target && onSelectNode(target.id)}
-                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface"
+                disabled={!target}
+                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-55"
               >
                 <span
                   className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
@@ -425,8 +427,10 @@ export function SubGraph({ node, graphData, onSelectNode }: SubGraphProps) {
             return (
               <button
                 key={link.id}
+                type="button"
                 onClick={() => source && onSelectNode(source.id)}
-                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface"
+                disabled={!source}
+                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-55"
               >
                 <span
                   className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"

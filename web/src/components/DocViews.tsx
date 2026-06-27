@@ -606,8 +606,10 @@ export function LinkDocView({
         </span>
         <div className="mt-3 flex items-center gap-2">
           <button
+            type="button"
             onClick={() => source && onJumpToNode?.(source.id)}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-left hover:border-line-2"
+            disabled={!source || !onJumpToNode}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-left hover:border-line-2 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {srcMeta && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: srcMeta.color }} />}
             <span className="min-w-0">
@@ -617,8 +619,10 @@ export function LinkDocView({
           </button>
           <span className="shrink-0 font-mono text-[16px]" style={{ color: meta.color }}>→</span>
           <button
+            type="button"
             onClick={() => target && onJumpToNode?.(target.id)}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-left hover:border-line-2"
+            disabled={!target || !onJumpToNode}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-line bg-bg px-3 py-2 text-left hover:border-line-2 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {tgtMeta && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tgtMeta.color }} />}
             <span className="min-w-0">

@@ -291,6 +291,7 @@ export default function LandingPage() {
           {SAMPLES.map((s) => (
             <button
               key={s}
+              type="button"
               onClick={() => void start(s)}
               className="cursor-pointer rounded-md border px-2.5 py-1 font-mono transition-colors duration-150"
               style={{
