@@ -5,7 +5,7 @@ function evidenceList(items: GraphNode["evidence"] | GraphLink["evidence"]): str
   return items
     .map(
       (evidence) =>
-        `- \`${evidence.filePath}:L${evidence.lineStart}\` (${evidence.detector}, ${evidence.confidenceReason})\n  \`${evidence.snippet.replaceAll("`", "'")}\``,
+        `- ${evidence.id ? `\`${evidence.id}\` ` : ""}\`${evidence.filePath}:L${evidence.lineStart}\` (${evidence.detector}, ${evidence.confidenceReason})\n  \`${evidence.snippet.replaceAll("`", "'")}\``,
     )
     .join("\n");
 }
@@ -88,8 +88,10 @@ export function buildHandoffMap(args: {
         label: node.label,
         kind: node.kind,
         confidence: node.confidence,
+        evidenceId: evidence.id,
         lineStart: evidence.lineStart,
         lineEnd: evidence.lineEnd,
+        snippet: evidence.snippet,
         detector: evidence.detector,
         confidenceReason: evidence.confidenceReason,
       });
@@ -104,8 +106,10 @@ export function buildHandoffMap(args: {
         target: edge.target,
         kind: edge.kind,
         confidence: edge.confidence,
+        evidenceId: evidence.id,
         lineStart: evidence.lineStart,
         lineEnd: evidence.lineEnd,
+        snippet: evidence.snippet,
         detector: evidence.detector,
         confidenceReason: evidence.confidenceReason,
       });
@@ -138,7 +142,7 @@ Commit: ${commitSha}
 - Edges: ${graph.links.length}
 
 ## Evidence Policy
-All node and edge claims are derived from deterministic scanner findings. Backboard synthesis may improve summaries and risk wording, but evidence links remain the source of truth.
+Node and edge claims in this package are derived from deterministic scanner findings and carry evidence IDs, paths, line ranges, snippets, detectors, and confidence. Backboard synthesis is advisory metadata only unless a future slice explicitly cites stable evidence IDs for a claim.
 `;
 
   return {

@@ -66,10 +66,12 @@ artifacts to Backboard, stores Backboard assistant/thread metadata, and
 persists evidence-backed graph data in SQLite.
 
 Atlas is also intended to support new-developer and AI-agent handoff from
-unfinished Git PRs. Scan context therefore includes a handoff map that links
-evidence file paths and line ranges back to graph nodes and edges. Future PR
-diff tooling can use this map to explain which architectural facts a changed
-file is likely to touch, while preserving evidence and confidence.
+unfinished Git PRs, but this backend slice does not solve PR intake yet. Scan
+context therefore preserves the foundation for that next slice: stable evidence
+IDs, snippets, file paths, and line ranges that link deterministic scanner facts
+back to graph nodes and edges. Future PR diff tooling must still fetch PR
+base/head refs, changed files, unresolved task state, failures, and attempted
+commands before claiming an unfinished-PR handoff is complete.
 
 ```bash
 cp .env.example .env
@@ -104,6 +106,12 @@ The export package includes:
 - `node-context/*.md`
 - `link-context/*.md`
 - `handoff/handoff-map.json`
+- `backboard/backboard-record.json`
+
+Backboard synthesis is exported as advisory metadata only. Confirmed graph and
+handoff claims come from deterministic scanner evidence. Backboard memory writes
+store evidence-indexed durable facts and safe assistant/thread/run/memory
+operation handles; the export does not include API keys or raw secret values.
 
 ### Verification
 

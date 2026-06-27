@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .atlas/
 node_modules/
 dist/

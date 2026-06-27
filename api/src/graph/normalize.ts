@@ -15,6 +15,7 @@ import { packageFromImport } from "../scanner/scanner.js";
 
 function evidenceFromFinding(finding: Finding): Evidence {
   return {
+    id: finding.id,
     filePath: finding.filePath,
     lineStart: finding.lineStart,
     lineEnd: finding.lineEnd,
@@ -43,6 +44,12 @@ function moduleNameForFile(filePath: string): string {
   }
   if (parts.length > 1) return parts[0];
   return path.basename(filePath).replace(/\.[^.]+$/, "");
+}
+
+function moduleNameForRelativeImport(sourceFilePath: string, importValue: string): string | null {
+  if (!importValue.startsWith(".")) return null;
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(sourceFilePath), importValue));
+  return moduleNameForFile(resolved);
 }
 
 function moduleNodeId(repositoryId: string, moduleName: string): string {
@@ -120,18 +127,16 @@ export function buildGraphFromArtifacts(args: {
   artifacts: ScanArtifacts;
   backboard?: BackboardSynthesis | null;
 }): GraphData {
-  const { repository, artifacts, backboard } = args;
+  const { repository, artifacts } = args;
   const nodes = new Map<string, GraphNode>();
   const links = new Map<string, GraphLink>();
 
   const repoNodeId = stableId("repo", repository.id, "root");
   const repoDocs = firstEvidence(artifacts.findings, "doc");
   const packageEvidence = firstEvidence(artifacts.findings, "config", "package.json");
-  const repoPurpose =
-    backboard?.synthesized?.repoPurpose ??
-    (artifacts.package.name
-      ? `${repository.owner}/${repository.name} appears to publish or run ${artifacts.package.name}.`
-      : `${repository.owner}/${repository.name} repository root.`);
+  const repoPurpose = artifacts.package.name
+    ? `${repository.owner}/${repository.name} appears to publish or run ${artifacts.package.name}.`
+    : `${repository.owner}/${repository.name} repository root.`;
 
   addNode(nodes, {
     id: repoNodeId,
@@ -170,9 +175,7 @@ export function buildGraphFromArtifacts(args: {
       label: moduleName,
       kind: "service",
       domain: apiRoutes > 0 ? "API" : "Code",
-      whatItIs:
-        backboard?.synthesized?.nodeSummaries?.[moduleName] ??
-        `Source module inferred from files under ${moduleName}.`,
+      whatItIs: `Source module inferred from files under ${moduleName}.`,
       whyItExists:
         apiRoutes > 0
           ? "Contains route handlers or API endpoint declarations."
@@ -237,9 +240,7 @@ export function buildGraphFromArtifacts(args: {
       target: nodeId,
       kind: edgeKindForPackage(packageName, artifacts),
       criticality: Object.prototype.hasOwnProperty.call(artifacts.package.dependencies, packageName) ? 3 : 1,
-      summary:
-        backboard?.synthesized?.edgeSummaries?.[packageName] ??
-        `${repository.name} declares ${packageName} as a ${Object.prototype.hasOwnProperty.call(artifacts.package.dependencies, packageName) ? "runtime" : "development"} dependency.`,
+      summary: `${repository.name} declares ${packageName} as a ${Object.prototype.hasOwnProperty.call(artifacts.package.dependencies, packageName) ? "runtime" : "development"} dependency.`,
       code: evidence[0]?.snippet ?? `"${packageName}": "${dependencies[packageName]}"`,
       codePath: `${evidence[0]?.filePath ?? "package.json"}:L${evidence[0]?.lineStart ?? 1}`,
       contract: `package.json dependency ${packageName}@${dependencies[packageName]}`,
@@ -254,6 +255,29 @@ export function buildGraphFromArtifacts(args: {
   const importFindings = artifacts.findings.filter((finding) => finding.kind === "import");
   for (const finding of importFindings) {
     const sourceModule = moduleNodeId(repository.id, moduleNameForFile(finding.filePath));
+    const relativeModuleName = moduleNameForRelativeImport(finding.filePath, finding.value);
+    if (relativeModuleName) {
+      const target = moduleNodeId(repository.id, relativeModuleName);
+      if (nodes.has(sourceModule) && nodes.has(target) && sourceModule !== target) {
+        addLink(links, {
+          id: stableId(repository.id, "relative-import", sourceModule, target, finding.value),
+          source: sourceModule,
+          target,
+          kind: "config",
+          criticality: 2,
+          summary: `${moduleNameForFile(finding.filePath)} imports local module ${relativeModuleName}.`,
+          code: finding.snippet,
+          codePath: `${finding.filePath}:L${finding.lineStart}`,
+          contract: `Relative import path: ${finding.value}`,
+          failure: "Internal import resolution failure breaks build or runtime startup.",
+          risks: [],
+          confidence: "confirmed",
+          repositoryId: repository.id,
+          evidence: [evidenceFromFinding(finding)],
+        });
+      }
+      continue;
+    }
     const packageName = packageFromImport(finding.value);
     if (!packageName) continue;
     const target = externalNodeId(repository.id, packageName);
@@ -370,12 +394,6 @@ export function buildGraphFromArtifacts(args: {
       repositoryId: repository.id,
       evidence,
     });
-  }
-
-  const riskAreas = backboard?.synthesized?.riskAreas ?? [];
-  if (riskAreas.length > 0) {
-    const root = nodes.get(repoNodeId);
-    if (root) root.risks = unique([...root.risks, ...riskAreas.slice(0, 6)]);
   }
 
   return {

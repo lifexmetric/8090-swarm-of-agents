@@ -1,5 +1,5 @@
 import cors from "@fastify/cors";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import type { AtlasConfig } from "../config.js";
 import { AtlasRepository } from "../db/database.js";
@@ -36,6 +36,7 @@ function contextFiles(context: ScanContext) {
     ...context.nodeContext.map((file) => ({ path: file.path, markdown: file.markdown })),
     ...context.edgeContext.map((file) => ({ path: file.path, markdown: file.markdown })),
     { path: "handoff/handoff-map.json", markdown: JSON.stringify(context.handoff, null, 2) },
+    { path: "backboard/backboard-record.json", markdown: JSON.stringify(context.backboard ?? {}, null, 2) },
   ];
 }
 
@@ -54,8 +55,16 @@ export async function buildApp(args: {
   const scanService = args.scanService ?? new ScanService(args.config, args.repository);
 
   await app.register(cors, {
-    origin: true,
+    origin: args.config.corsOrigin ?? true,
   });
+
+  const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!args.config.apiAuthToken) return;
+    const authorization = request.headers.authorization;
+    if (authorization !== `Bearer ${args.config.apiAuthToken}`) {
+      return reply.status(401).send({ error: "Unauthorized", message: "Missing or invalid API bearer token" });
+    }
+  };
 
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
     const statusCode = error instanceof ZodError ? 400 : error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
@@ -71,7 +80,7 @@ export async function buildApp(args: {
     backboardConfigured: Boolean(args.config.backboardApiKey),
   }));
 
-  app.post("/api/scans", async (request, reply) => {
+  app.post("/api/scans", { preHandler: requireAuth }, async (request, reply) => {
     const parsed = createScanSchema.parse(request.body);
     const scan = await scanService.startScan(parsed);
     reply.status(202).send(scan);
@@ -130,7 +139,7 @@ export async function buildApp(args: {
     return edge;
   });
 
-  app.get("/api/scans/:scanId/context", async (request, reply) => {
+  app.get("/api/scans/:scanId/context", { preHandler: requireAuth }, async (request, reply) => {
     const { scanId } = paramsSchema.parse(request.params);
     const scan = args.repository.getScan(scanId);
     if (!scan) return reply.status(404).send({ error: "Not Found", message: "Scan not found" });
@@ -138,7 +147,7 @@ export async function buildApp(args: {
     return scan.context;
   });
 
-  app.get("/api/scans/:scanId/handoff", async (request, reply) => {
+  app.get("/api/scans/:scanId/handoff", { preHandler: requireAuth }, async (request, reply) => {
     const { scanId } = paramsSchema.parse(request.params);
     const scan = args.repository.getScan(scanId);
     if (!scan) return reply.status(404).send({ error: "Not Found", message: "Scan not found" });
@@ -146,7 +155,7 @@ export async function buildApp(args: {
     return scan.context.handoff;
   });
 
-  app.get("/api/scans/:scanId/export", async (request, reply) => {
+  app.get("/api/scans/:scanId/export", { preHandler: requireAuth }, async (request, reply) => {
     const { scanId } = paramsSchema.parse(request.params);
     const scan = args.repository.getScan(scanId);
     if (!scan) return reply.status(404).send({ error: "Not Found", message: "Scan not found" });

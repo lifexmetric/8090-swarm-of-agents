@@ -25,7 +25,11 @@ export interface AtlasConfig {
   scanMaxFiles: number;
   scanMaxFileBytes: number;
   scanMaxPromptChars: number;
+  scanTimeoutSeconds: number;
   reposDir: string;
+  githubAllowedOrgs: string[];
+  corsOrigin?: string;
+  apiAuthToken?: string;
 }
 
 function firstNonEmpty(...values: Array<string | undefined | null>): string | undefined {
@@ -37,6 +41,15 @@ function readInt(names: string | string[], fallback: number): number {
   if (!raw) return fallback;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readCsv(value: string | undefined): string[] {
+  return value
+    ? value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
 }
 
 function resolveFileDatabaseUrl(databaseUrl: string, rootDir: string): string {
@@ -81,9 +94,13 @@ export function loadConfig(overrides: Partial<AtlasConfig> = {}): AtlasConfig {
       overrides.scanMaxFileBytes ??
       readInt("SCAN_MAX_FILE_BYTES", readInt("ATLAS_MAX_FILE_SIZE_KB", 220) * 1024),
     scanMaxPromptChars: overrides.scanMaxPromptChars ?? readInt("SCAN_MAX_PROMPT_CHARS", 42_000),
+    scanTimeoutSeconds: overrides.scanTimeoutSeconds ?? readInt("ATLAS_SCAN_TIMEOUT_SECONDS", 900),
     reposDir:
       overrides.reposDir ??
       firstNonEmpty(process.env.ATLAS_REPOS_DIR, process.env.ATLAS_REPO_TMP_DIR) ??
       path.join(rootDir, ".atlas", "repos"),
+    githubAllowedOrgs: overrides.githubAllowedOrgs ?? readCsv(firstNonEmpty(process.env.GITHUB_ALLOWED_ORGS)),
+    corsOrigin: overrides.corsOrigin ?? firstNonEmpty(process.env.CORS_ORIGIN),
+    apiAuthToken: overrides.apiAuthToken ?? firstNonEmpty(process.env.ATLAS_API_AUTH_TOKEN),
   };
 }

@@ -1,6 +1,7 @@
 import type { AtlasConfig } from "../config.js";
-import type { BackboardSynthesis, RepositoryRecord, ScanArtifacts } from "../types/domain.js";
-import { compactForPrompt } from "../util/redact.js";
+import type { BackboardMemoryStatus, BackboardSynthesis, DurableMemoryFact, RepositoryRecord, ScanArtifacts } from "../types/domain.js";
+import { compactForPrompt, redactSecrets } from "../util/redact.js";
+import { stableId } from "../util/ids.js";
 
 interface BackboardAssistantResponse {
   id?: string;
@@ -69,6 +70,66 @@ function recordFromJson(value: unknown): Record<string, string> | undefined {
     if (typeof item === "string") out[key] = item;
   }
   return out;
+}
+
+export function buildDurableMemoryFacts(args: {
+  repository: RepositoryRecord;
+  commitSha: string;
+  artifacts: ScanArtifacts;
+}): DurableMemoryFact[] {
+  const repo = `${args.repository.owner}/${args.repository.name}`;
+  const facts: DurableMemoryFact[] = [];
+  const packageNameFinding = args.artifacts.findings.find(
+    (finding) => finding.detector === "package-json-name" && finding.value === args.artifacts.package.name,
+  );
+  if (args.artifacts.package.name && packageNameFinding) {
+    facts.push({
+      id: stableId("memory-fact", args.repository.id, args.commitSha, "package-name", args.artifacts.package.name),
+      scope: "repository",
+      repositoryId: args.repository.id,
+      repo,
+      commitSha: args.commitSha,
+      fact: `${repo} declares package identity ${args.artifacts.package.name}.`,
+      confidence: "confirmed",
+      evidenceIds: [packageNameFinding.id],
+      evidenceRefs: [
+        {
+          evidenceId: packageNameFinding.id,
+          filePath: packageNameFinding.filePath,
+          lineStart: packageNameFinding.lineStart,
+          lineEnd: packageNameFinding.lineEnd,
+          detector: packageNameFinding.detector,
+          snippet: redactSecrets(packageNameFinding.snippet),
+        },
+      ],
+    });
+  }
+
+  for (const finding of args.artifacts.findings.filter((item) => item.kind === "package").slice(0, 40)) {
+    if (finding.detector === "package-json-name") continue;
+    facts.push({
+      id: stableId("memory-fact", args.repository.id, args.commitSha, "dependency", finding.label),
+      scope: "dependency",
+      repositoryId: args.repository.id,
+      repo,
+      commitSha: args.commitSha,
+      fact: `${repo} declares dependency ${finding.label}.`,
+      confidence: "confirmed",
+      evidenceIds: [finding.id],
+      evidenceRefs: [
+        {
+          evidenceId: finding.id,
+          filePath: finding.filePath,
+          lineStart: finding.lineStart,
+          lineEnd: finding.lineEnd,
+          detector: finding.detector,
+          snippet: redactSecrets(finding.snippet),
+        },
+      ],
+    });
+  }
+
+  return facts;
 }
 
 export class BackboardClient {
@@ -140,6 +201,7 @@ export class BackboardClient {
         devDependencies: args.artifacts.package.devDependencies,
       },
       findings: args.artifacts.findings.slice(0, 220).map((finding) => ({
+        id: finding.id,
         kind: finding.kind,
         label: finding.label,
         value: finding.value,
@@ -173,11 +235,12 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
     if (!threadId) throw new Error("Backboard message response did not include a thread id");
     const content = asText(response.content ?? response.message?.content ?? response.output ?? response);
     const parsed = extractJsonObject(content);
-    const memoryOperationId = await this.addMemorySafe({
+    const durableFacts = buildDurableMemoryFacts(args);
+    const memoryStatus = await this.addMemorySafe({
       assistantId: args.assistantId,
       repository: args.repository,
       commitSha: args.commitSha,
-      content,
+      facts: durableFacts,
     });
 
     return {
@@ -187,7 +250,9 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
       messageId: response.message_id ?? response.message?.id ?? response.id ?? null,
       content,
       memoryMode: this.config.backboardMemoryMode,
-      memoryOperationId,
+      memoryOperationId: memoryStatus.operationId ?? null,
+      memoryStatus,
+      durableFacts,
       responseJson: response,
       synthesized: parsed
         ? {
@@ -207,22 +272,48 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
     assistantId: string;
     repository: RepositoryRecord;
     commitSha: string;
-    content: string;
-  }): Promise<string | null> {
+    facts: DurableMemoryFact[];
+  }): Promise<BackboardMemoryStatus> {
+    if (args.facts.length === 0) {
+      return { attempted: false, succeeded: false, operationId: null, factCount: 0 };
+    }
     try {
       const response = await this.request<Record<string, unknown>>(`/assistants/${args.assistantId}/memories`, {
-        content: `Durable Atlas repo/system knowledge for future human and AI-agent handoff. Repository ${args.repository.owner}/${args.repository.name}@${args.commitSha}. Store confirmed architecture facts, risks, dependencies, and before-changing-this guidance only; preserve uncertainty markers. Summary: ${args.content.slice(0, 2400)}`,
+        content: compactForPrompt(
+          {
+            purpose:
+              "Durable Atlas repo/system knowledge for future human and AI-agent handoff. Store only these evidence-indexed facts; do not infer additional architecture.",
+            repository: `${args.repository.owner}/${args.repository.name}`,
+            repositoryId: args.repository.id,
+            commitSha: args.commitSha,
+            facts: args.facts,
+          },
+          12_000,
+        ),
         metadata: {
           product: "atlas",
           repositoryId: args.repository.id,
           repo: `${args.repository.owner}/${args.repository.name}`,
           commitSha: args.commitSha,
+          factCount: args.facts.length,
+          evidenceIndexed: true,
         },
       });
       const id = response.id ?? response.memory_id ?? response.operation_id;
-      return typeof id === "string" ? id : null;
-    } catch {
-      return null;
+      return {
+        attempted: true,
+        succeeded: true,
+        operationId: typeof id === "string" ? id : null,
+        factCount: args.facts.length,
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        succeeded: false,
+        operationId: null,
+        error: error instanceof Error ? error.message : "Unknown Backboard memory failure",
+        factCount: args.facts.length,
+      };
     }
   }
 }

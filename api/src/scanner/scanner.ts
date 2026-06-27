@@ -20,9 +20,6 @@ const IGNORED_DIRS = new Set([
 
 const SECRET_FILE_NAMES = new Set([
   ".env",
-  ".env.local",
-  ".env.production",
-  ".env.development",
   "id_rsa",
   "id_ed25519",
 ]);
@@ -82,6 +79,8 @@ function shouldIgnore(relativePath: string): boolean {
   if (parts.some((part) => IGNORED_DIRS.has(part))) return true;
   const base = path.basename(relativePath);
   if (SECRET_FILE_NAMES.has(base.toLowerCase())) return true;
+  if (base.toLowerCase().startsWith(".env.") && base !== ".env.example") return true;
+  if (/secret|credentials/i.test(base)) return true;
   if (base.endsWith(".pem") || base.endsWith(".key") || base.endsWith(".p12")) return true;
   return false;
 }
@@ -160,11 +159,12 @@ function findingFromEvidence(
   value: string,
   evidence: Evidence,
 ): Finding {
+  const redactedValue = redactSecrets(value);
   return {
-    id: stableId(kind, label, value, evidence.filePath, evidence.lineStart),
+    id: stableId(kind, label, redactedValue, evidence.filePath, evidence.lineStart),
     kind,
     label,
-    value,
+    value: redactedValue,
     ...evidence,
   };
 }
@@ -194,6 +194,19 @@ function parsePackageJson(relativePath: string, text: string): {
     pkg.devDependencies = parsed.devDependencies ?? {};
 
     const lines = text.split(/\r?\n/);
+    if (pkg.name) {
+      const lineIndex = lines.findIndex((line) => line.includes('"name"'));
+      const ev = evidenceFromLine({
+        filePath: relativePath,
+        line: lineIndex >= 0 ? lines[lineIndex] : `"name": "${pkg.name}"`,
+        lineNumber: lineIndex >= 0 ? lineIndex + 1 : 1,
+        detector: "package-json-name",
+        confidenceReason: "Package identity is declared in package.json.",
+      });
+      findings.push(findingFromEvidence("package", "package-name", pkg.name, ev));
+      evidence.push(ev);
+    }
+
     for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
       const lineIndex = lines.findIndex((line) => line.includes(`"${name}"`));
       const ev = evidenceFromLine({

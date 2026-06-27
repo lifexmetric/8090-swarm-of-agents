@@ -19,7 +19,7 @@ import { Logo, cn } from "@/components/ui";
 interface ContextFile {
   id: string;
   name: string;
-  group: "brief" | "node" | "link";
+  group: "brief" | "node" | "link" | "metadata";
   content: string;
 }
 
@@ -100,7 +100,7 @@ function ExportPageContent() {
         const mapped = response.files.map((file): ContextFile => ({
           id: file.path,
           name: file.path,
-          group: file.path === "system-brief.md" ? "brief" : file.path.startsWith("node-context/") ? "node" : "link",
+          group: file.path === "system-brief.md" ? "brief" : file.path.startsWith("node-context/") ? "node" : file.path.startsWith("link-context/") ? "link" : "metadata",
           content: file.markdown,
         }));
         setFileLoad({ scanId: scanId!, files: mapped, apiNotice: null });
@@ -110,9 +110,8 @@ function ExportPageContent() {
           setFileLoad({
             scanId: scanId!,
             files: null,
-            apiNotice: err instanceof Error ? err.message : "Unable to load backend export; showing mock package",
+            apiNotice: err instanceof Error ? err.message : "Unable to load backend export",
           });
-          setActiveId(FILES[0].id);
         }
       }
     }
@@ -147,6 +146,24 @@ function ExportPageContent() {
 
   const nodeFiles = files.filter((f) => f.group === "node");
   const linkFiles = files.filter((f) => f.group === "link");
+  const explicitScanFailed = Boolean(scanId && activeFileLoad?.apiNotice && !activeFileLoad.files);
+
+  if (explicitScanFailed) {
+    return (
+      <main className="flex h-screen items-center justify-center bg-[#000] px-6">
+        <div className="max-w-md border border-[#2a2a2a] bg-[#050505] p-5">
+          <p className="mb-2 text-sm font-semibold text-[#ededed]">Real export unavailable</p>
+          <p className="text-[13px] leading-relaxed text-[#888]">{apiNotice}</p>
+          <Link
+            href={`/explore?scanId=${encodeURIComponent(scanId!)}`}
+            className="mt-4 inline-flex bg-[#ededed] px-3 py-1.5 text-[13px] font-semibold text-black"
+          >
+            Back to scan
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex h-screen flex-col bg-[#000]">
@@ -164,7 +181,7 @@ function ExportPageContent() {
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden font-mono text-[12px] text-[#555] md:inline">
               {files.length} files · {nodeFiles.length} nodes · {linkFiles.length} links
-              {apiNotice ? " · mock fallback" : ""}
+              {apiNotice ? " · backend notice" : ""}
             </span>
             <button
               onClick={downloadPackage}

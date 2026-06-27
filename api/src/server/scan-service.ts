@@ -37,6 +37,9 @@ export class ScanService {
   }): Promise<ScanRecord> {
     const workspaceId = input.workspaceId ?? this.config.workspaceId;
     const repoRef = parseGitHubRepo(input.repoUrl);
+    if (this.config.githubAllowedOrgs.length > 0 && !this.config.githubAllowedOrgs.includes(repoRef.owner)) {
+      throw new Error(`GitHub owner ${repoRef.owner} is not allowed by GITHUB_ALLOWED_ORGS`);
+    }
     this.repository.ensureWorkspace(workspaceId);
 
     const repository = this.repository.upsertRepository({
@@ -92,6 +95,7 @@ export class ScanService {
         reposDir: this.config.reposDir,
         scanId,
         commitSha: scan.commitSha ?? undefined,
+        timeoutMs: this.config.scanTimeoutSeconds * 1000,
       });
 
       this.repository.addEvent({
@@ -128,6 +132,13 @@ export class ScanService {
         backboard,
         requestSummary: `${repo.owner}/${repo.name}@${cloned.commitSha}`,
       });
+      if (backboard.memoryStatus?.attempted && !backboard.memoryStatus.succeeded) {
+        this.repository.addEvent({
+          scanId,
+          type: "backboard",
+          message: `Backboard memory write failed: ${backboard.memoryStatus.error ?? "unknown error"}`,
+        });
+      }
 
       const graph = buildGraphFromArtifacts({
         repository: updatedRepo,
@@ -145,6 +156,10 @@ export class ScanService {
           threadId: backboard.threadId,
           runId: backboard.runId,
           memoryMode: backboard.memoryMode,
+          memoryOperationId: backboard.memoryOperationId,
+          memoryStatus: backboard.memoryStatus ?? null,
+          durableFacts: backboard.durableFacts ?? [],
+          advisorySynthesis: backboard.synthesized,
         },
       });
 

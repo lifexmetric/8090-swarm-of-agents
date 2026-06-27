@@ -171,6 +171,8 @@ export interface BackboardSynthesis {
   content: string;
   memoryMode: string;
   memoryOperationId?: string | null;
+  memoryStatus?: BackboardMemoryStatus;
+  durableFacts?: DurableMemoryFact[];
   responseJson: unknown;
   synthesized?: {
     repoPurpose?: string;
@@ -183,6 +185,33 @@ export interface BackboardSynthesis {
   };
 }
 
+export interface DurableMemoryFact {
+  id: string;
+  scope: "repository" | "dependency" | "finding";
+  repositoryId: string;
+  repo: string;
+  commitSha: string;
+  fact: string;
+  confidence: Confidence;
+  evidenceIds: string[];
+  evidenceRefs: Array<{
+    evidenceId: string;
+    filePath: string;
+    lineStart: number;
+    lineEnd: number;
+    detector: string;
+    snippet: string;
+  }>;
+}
+
+export interface BackboardMemoryStatus {
+  attempted: boolean;
+  succeeded: boolean;
+  operationId?: string | null;
+  error?: string | null;
+  factCount: number;
+}
+
 export interface ScanContext {
   systemBrief: string;
   nodeContext: Array<{ nodeId: string; path: string; markdown: string }>;
@@ -193,6 +222,10 @@ export interface ScanContext {
     threadId?: string | null;
     runId?: string | null;
     memoryMode?: string | null;
+    memoryOperationId?: string | null;
+    memoryStatus?: BackboardMemoryStatus | null;
+    durableFacts?: DurableMemoryFact[];
+    advisorySynthesis?: BackboardSynthesis["synthesized"];
   };
 }
 
@@ -207,8 +240,10 @@ export interface HandoffContextMap {
       label: string;
       kind: NodeKind;
       confidence: Confidence;
+      evidenceId?: string;
       lineStart: number;
       lineEnd: number;
+      snippet: string;
       detector: string;
       confidenceReason: string;
     }>;
@@ -218,8 +253,10 @@ export interface HandoffContextMap {
       target: string;
       kind: EdgeKind;
       confidence: Confidence;
+      evidenceId?: string;
       lineStart: number;
       lineEnd: number;
+      snippet: string;
       detector: string;
       confidenceReason: string;
     }>;
@@ -235,6 +272,8 @@ export interface WorkspaceGraph extends GraphData {
     targetRepositoryId: string;
     sourcePackage: string;
     targetPackage: string;
+    sourceEvidence: Evidence[];
+    targetEvidence: Evidence[];
     evidence: Evidence[];
     summary: string;
   }>;

@@ -30,6 +30,13 @@ function json(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
+function ensureColumn(db: SqliteDatabase, tableName: string, columnName: string, definition: string): void {
+  const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  if (!rows.some((row) => row.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 export function openDatabase(databasePath: string): SqliteDatabase {
   fs.mkdirSync(path.dirname(databasePath), { recursive: true });
   const db = new Database(databasePath);
@@ -129,6 +136,7 @@ export function migrate(db: SqliteDatabase): void {
       scan_id TEXT NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
       subject_type TEXT NOT NULL,
       subject_stable_id TEXT NOT NULL,
+      stable_id TEXT,
       file_path TEXT NOT NULL,
       line_start INTEGER NOT NULL,
       line_end INTEGER NOT NULL,
@@ -162,7 +170,9 @@ export function migrate(db: SqliteDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_edges_workspace ON edges(workspace_id);
     CREATE INDEX IF NOT EXISTS idx_edges_stable_id ON edges(stable_id);
     CREATE INDEX IF NOT EXISTS idx_evidence_subject ON evidence(subject_type, subject_stable_id);
+    CREATE INDEX IF NOT EXISTS idx_evidence_stable_id ON evidence(stable_id);
   `);
+  ensureColumn(db, "evidence", "stable_id", "TEXT");
 }
 
 export class AtlasRepository {
@@ -388,9 +398,9 @@ export class AtlasRepository {
       `);
       const insertEvidence = this.db.prepare(`
         INSERT INTO evidence
-          (scan_id, subject_type, subject_stable_id, file_path, line_start, line_end, snippet, detector, confidence_reason, created_at)
+          (scan_id, subject_type, subject_stable_id, stable_id, file_path, line_start, line_end, snippet, detector, confidence_reason, created_at)
         VALUES
-          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const node of input.graph.nodes) {
@@ -414,6 +424,7 @@ export class AtlasRepository {
             input.scanId,
             "node",
             node.id,
+            evidence.id ?? null,
             evidence.filePath,
             evidence.lineStart,
             evidence.lineEnd,
@@ -446,6 +457,7 @@ export class AtlasRepository {
             input.scanId,
             "edge",
             edge.id,
+            evidence.id ?? null,
             evidence.filePath,
             evidence.lineStart,
             evidence.lineEnd,

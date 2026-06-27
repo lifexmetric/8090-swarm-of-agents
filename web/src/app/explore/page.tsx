@@ -24,6 +24,7 @@ import { NODE_ICON } from "@/components/icons";
 
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
 const MOCK_REPO_LABEL = "acme/payments-platform";
+const EMPTY_GRAPH: GraphData = { nodes: [], links: [] };
 
 export default function ExplorePage() {
   return (
@@ -69,8 +70,8 @@ function ExplorePageContent() {
           setGraphLoad({
             scanId: scanId!,
             graph: null,
-            repoLabel: MOCK_REPO_LABEL,
-            apiNotice: err instanceof Error ? err.message : "Unable to load backend graph; showing mock data",
+            repoLabel: scanId!,
+            apiNotice: err instanceof Error ? err.message : "Unable to load backend graph",
           });
         }
       }
@@ -82,7 +83,8 @@ function ExplorePageContent() {
   }, [scanId]);
 
   const activeGraphLoad = graphLoad?.scanId === scanId ? graphLoad : null;
-  const graph = activeGraphLoad?.graph ?? GRAPH;
+  const explicitScanFailed = Boolean(scanId && activeGraphLoad?.apiNotice && !activeGraphLoad.graph);
+  const graph = explicitScanFailed ? EMPTY_GRAPH : activeGraphLoad?.graph ?? GRAPH;
   const repoLabel = activeGraphLoad?.repoLabel ?? MOCK_REPO_LABEL;
   const apiNotice = activeGraphLoad?.apiNotice;
 
@@ -132,6 +134,17 @@ function ExplorePageContent() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#000]">
+      {explicitScanFailed && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#000] px-6">
+          <div className="max-w-md border border-[#2a2a2a] bg-[#050505] p-5">
+            <p className="mb-2 text-sm font-semibold text-[#ededed]">Real scan unavailable</p>
+            <p className="text-[13px] leading-relaxed text-[#888]">{apiNotice}</p>
+            <Link href="/" className="mt-4 inline-flex bg-[#ededed] px-3 py-1.5 text-[13px] font-semibold text-black">
+              Start another scan
+            </Link>
+          </div>
+        </div>
+      )}
       {/* Graph canvas */}
       <div className="absolute inset-0">
         <Graph3D
