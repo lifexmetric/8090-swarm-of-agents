@@ -1,40 +1,48 @@
-/* Hallmark · macrostructure: Workbench · tone: austere/technical · anchor hue: monochrome + blue */
+/* Atlas · macrostructure: Workbench · tone: refined/technical · anchor hue: indigo + monochrome */
 @import "tailwindcss";
 
 @theme {
-  /* ── Surfaces ── */
-  --color-bg:        #000000;
-  --color-bg-2:      #0a0a0a;
-  --color-surface:   #111111;
-  --color-surface-2: #181818;
-  --color-surface-3: #1f1f1f;
+  /* ── Surfaces (warm dark greys, never pure black) ── */
+  --color-bg:        #0c0d10;
+  --color-bg-2:      #12131a;
+  --color-surface:   #181a22;
+  --color-surface-2: #1e2028;
+  --color-surface-3: #262830;
 
   /* ── Text ── */
-  --color-ink:   #ededed;
-  --color-muted: #888888;
-  --color-faint: #555555;
+  --color-ink:   #e8e9ed;
+  --color-muted: #8b8d98;
+  --color-faint: #5c5e6a;
 
-  /* ── Borders ── */
-  --color-line:  #2a2a2a;
-  --color-line-2:#3a3a3a;
+  /* ── Borders (slightly blue-tinted) ── */
+  --color-line:  #2a2c36;
+  --color-line-2:#3a3c48;
 
-  /* ── Accent (one — white/inverted) ── */
-  --color-accent: #ffffff;
+  /* ── Accent (primary: indigo, secondary: white) ── */
+  --color-accent:   #818cf8;
+  --color-accent-2: #e8e9ed;
 
   /* ── Node group colors (3 + neutral) ── */
-  --color-node-service:  #f0f0f0;
-  --color-node-infra:    #3b82f6;
-  --color-node-external: #f97316;
-  --color-node-neutral:  #555555;
+  --color-node-service:  #e8e9ed;
+  --color-node-infra:    #60a5fa;
+  --color-node-external: #fb923c;
+  --color-node-neutral:  #5c5e6a;
 
   /* ── Semantic status ── */
-  --color-ok:   #22c55e;
-  --color-warn: #f59e0b;
-  --color-err:  #ef4444;
+  --color-ok:   #34d399;
+  --color-warn: #fbbf24;
+  --color-err:  #f87171;
 
   /* ── Fonts ── */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* ── Radii ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
 
   /* ── Easing ── */
   --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
@@ -73,7 +81,7 @@ body {
 .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scroll-thin::-webkit-scrollbar-thumb {
   background: var(--color-line-2);
-  border-radius: 0;
+  border-radius: var(--radius-full);
 }
 .scroll-thin::-webkit-scrollbar-thumb:hover {
   background: var(--color-faint);
@@ -83,10 +91,12 @@ body {
 .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
 }
 .panel-2 {
   background: var(--color-surface-2);
   border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
 }
 
 /* ── Animations ── */

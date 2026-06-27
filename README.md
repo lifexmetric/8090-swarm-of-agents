@@ -48,6 +48,8 @@ The same scan powers both the visual map and the markdown export, so humans and 
 
 ## Run Locally
 
+### Frontend
+
 ```bash
 cd web
 npm install
@@ -55,3 +57,94 @@ npm run dev
 ```
 
 Then open the local Next.js URL shown in the terminal.
+
+### Backend
+
+The backend is a separate Fastify service under `api/`. It clones public
+GitHub repositories, runs deterministic JS/TS scanners, sends compact scan
+artifacts to Backboard, stores Backboard assistant/thread metadata, and
+persists evidence-backed graph data in SQLite.
+
+Atlas is also intended to support new-developer and AI-agent handoff from
+unfinished Git PRs, but this backend slice does not solve PR intake yet. Scan
+context therefore preserves the foundation for that next slice: stable evidence
+IDs, snippets, file paths, and line ranges that link deterministic scanner facts
+back to graph nodes and edges. Future PR diff tooling must still fetch PR
+base/head refs, changed files, unresolved task state, failures, and attempted
+commands before claiming an unfinished-PR handoff is complete.
+
+```bash
+cp .env.example .env
+# Fill BACKBOARD_API_KEY in .env. Do not commit .env.
+
+cd api
+npm install
+npm run migrate
+npm run dev
+```
+
+The default API URL is `http://127.0.0.1:3001`. SQLite is stored at
+`.atlas/atlas.db` from `DATABASE_URL=file:./.atlas/atlas.db`.
+
+### Required API Endpoints
+
+- `POST /api/scans`
+- `GET /api/scans/:scanId`
+- `GET /api/scans/:scanId/events`
+- `GET /api/scans/:scanId/graph`
+- `GET /api/workspaces/:workspaceId/graph`
+- `GET /api/repositories`
+- `GET /api/nodes/:nodeId`
+- `GET /api/edges/:edgeId`
+- `GET /api/scans/:scanId/context`
+- `GET /api/scans/:scanId/handoff`
+- `GET /api/scans/:scanId/export`
+
+The export package includes:
+
+- `system-brief.md`
+- `node-context/*.md`
+- `link-context/*.md`
+- `handoff/handoff-map.json`
+- `backboard/backboard-record.json`
+
+Backboard synthesis is exported as advisory metadata only. Confirmed graph and
+handoff claims come from deterministic scanner evidence. Backboard memory writes
+store evidence-indexed durable facts and safe assistant/thread/run/memory
+operation handles; the export does not include API keys or raw secret values.
+
+### Verification
+
+Backend checks:
+
+```bash
+cd api
+npm run typecheck
+npm test
+```
+
+Frontend checks:
+
+```bash
+cd web
+npm run lint
+npm run build
+```
+
+Real Backboard verification requires the local `.env` to include
+`BACKBOARD_API_KEY`. Start the backend, then run:
+
+```bash
+cd api
+npm run verify:public
+```
+
+The verification script scans:
+
+- `https://github.com/fastify/fastify-plugin`
+- `https://github.com/fastify/fastify-autoload`
+
+Those repos are small public JS/TS repositories with a package-level
+relationship: `fastify-autoload` depends on the `fastify-plugin` package
+produced by `fastify-plugin`. Atlas uses that dependency declaration as
+evidence for a supported cross-repo workspace graph connection.

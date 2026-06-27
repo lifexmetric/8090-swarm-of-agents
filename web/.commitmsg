@@ -1,0 +1,35 @@
+feat: graph traversal, sub-graph drill-down, and rich export docs
+
+Graph and explore page:
+- Add critical path highlight mode (api-gateway to payments-service to rbc rail)
+- Add keyboard navigation: up/down to traverse deps, Esc to deselect
+- Double-click any node to open sub-graph tab directly
+- Entry-point pulse ring and start-here label on api-gateway when idle
+- Flow rail swim-lane labels enhanced with background rect for readability
+- Critical path nodes/edges highlighted red with dedicated arrow marker
+- Keyboard shortcut hints in legend panel and contextual bottom hint bar
+
+SubGraph component:
+- Criticality-weighted edge thickness and opacity (1-5 scale)
+- Criticality-5 edges get lightning indicator at midpoint
+- Hover tooltip shows edge kind and criticality score
+- Contextual leaf-node empty state by node kind
+
+NodePanel:
+- Overview / Sub-graph tab system with connection count badge
+- Breadcrumb trail with Back button for drill-down history
+- Code snippets shown in sub-graph tab for outgoing deps
+- Explore connections prompt at bottom of overview
+
+Export page:
+- Rich node doc view: interactive SubGraph at top, collapsible
+  per-dependency deep-dive cards (contract, failure, code, beforeYouChange)
+- Cards sorted by criticality, open by default for criticality 4+
+- New risk-surface.md: criticality-5 links, risk-flagged nodes,
+  uncertain deps, aggregated beforeYouChange gotchas
+- Clicking a neighbour in the sub-graph jumps to that node's doc
+- CriticalityBar component (color-coded 1-5 bar)
+
+data.ts:
+- Expanded nodeContextMarkdown with full per-dependency prose blocks
+- New riskSurfaceMarkdown() helper for the danger-map page
