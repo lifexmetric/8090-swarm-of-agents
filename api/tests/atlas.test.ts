@@ -787,7 +787,28 @@ describe("handoff chat backend", () => {
     expect(answer).toContain("Confidence: uncertain");
     expect(answer).toContain("Invalid citations ignored: [E999]");
     expect(answer).toContain("not supporting proof");
+    expect(answer).not.toContain("database module is safe");
     expect(answer).not.toContain("confirmed by retrieved scan evidence");
+    expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
+  });
+
+  it("does not preserve confident unsupported direct answers when only citations are unknown", () => {
+    const context = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "Who owns SSNs?",
+      scanId: "scan_fixture",
+    });
+
+    const answer = enforceEvidencePolicy("Direct answer: payroll-service is confirmed as the SSN owner. [E999]", context);
+
+    expect(answer).toContain("Direct answer: I cannot verify that claim from the retrieved scan evidence.");
+    expect(answer).toContain("Invalid citations ignored: [E999]");
+    expect(answer).toContain("unsupported architecture claims in the model output were ignored");
+    expect(answer).not.toContain("payroll-service is confirmed as the SSN owner");
+    expect(answer).not.toContain("is confirmed");
+    expect(answer).not.toContain("SSN owner");
+    expect(answer).not.toContain("grounded");
     expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);
   });
 
@@ -807,6 +828,7 @@ describe("handoff chat backend", () => {
     expect(answer).toContain("Confidence: uncertain");
     expect(answer).toContain("Invalid citations ignored: [E999]");
     expect(answer).toContain("unverified");
+    expect(answer).not.toContain("database module is safe");
     expect(answer).not.toContain("confirmed by retrieved scan evidence");
     expect(answer).not.toContain("grounded");
     expect(extractDurableMemoryFacts(answer, context)).toHaveLength(0);

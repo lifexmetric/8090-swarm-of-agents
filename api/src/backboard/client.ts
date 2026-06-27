@@ -584,14 +584,17 @@ export function enforceEvidencePolicy(content: string, context: ChatContextBundl
       "Confidence: uncertain. No retrieved scan evidence was available, so unsupported architecture claims in the model output were ignored.",
     ].join("\n");
   }
-  if (context.evidence.length > 0 && (!hasCitation || !hasValidCitation) && !hasNoEvidence) {
+  if (context.evidence.length > 0 && hasCitation && !hasValidCitation && !hasNoEvidence) {
+    const citationIds = context.evidence.slice(0, 3).map((citation) => `[${citation.id}]`).join(" ");
+    trimmed = "Direct answer: I cannot verify that claim from the retrieved scan evidence.";
+    trimmed = `${trimmed}\n\nConfidence: uncertain and unverified. The answer cited only unknown evidence IDs, so unsupported architecture claims in the model output were ignored.`;
+    trimmed = `${trimmed}\n\nRetrieved context to inspect, not supporting proof for the answer: ${citationIds}.`;
+    trimmed = `${trimmed}\n\nInvalid citations ignored: ${invalidCitedIds.map((citationId) => `[${citationId}]`).join(" ")}.`;
+  } else if (context.evidence.length > 0 && !hasCitation && !hasNoEvidence) {
     const citationIds = context.evidence.slice(0, 3).map((citation) => `[${citation.id}]`).join(" ");
     trimmed = neutralizeUnsupportedConfidence(trimmed);
     trimmed = `${trimmed}\n\nConfidence: uncertain. Retrieved scan context exists, but this answer did not cite a valid evidence ID, so treat architectural claims as unverified.`;
     trimmed = `${trimmed}\n\nRetrieved context to inspect, not supporting proof for the answer: ${citationIds}.`;
-    if (invalidCitedIds.length > 0) {
-      trimmed = `${trimmed}\n\nInvalid citations ignored: ${invalidCitedIds.map((citationId) => `[${citationId}]`).join(" ")}.`;
-    }
   } else if (context.evidence.length > 0 && invalidCitedIds.length > 0 && hasValidCitation && !hasNoEvidence) {
     const invalidList = invalidCitedIds.map((citationId) => `[${citationId}]`).join(" ");
     const validList = validCitedIds.map((citationId) => `[${citationId}]`).join(" ");
