@@ -104,14 +104,9 @@ function addLink(links: Map<string, GraphLink>, link: GraphLink): void {
 }
 
 function edgeKindForPackage(packageName: string, artifacts: ScanArtifacts): EdgeKind {
-  const names = packageName.toLowerCase();
-  const queuePackages = ["kafka", "amqp", "rabbit", "sqs", "pubsub", "bull"];
-  const dbPackages = ["prisma", "pg", "mysql", "sqlite", "drizzle", "typeorm", "mongoose", "sequelize"];
-  if (queuePackages.some((needle) => names.includes(needle))) return "async";
-  if (dbPackages.some((needle) => names.includes(needle))) return "db";
-  if (["next", "express", "fastify", "koa", "hono"].some((needle) => names.includes(needle))) return "sync";
-  if (Object.keys(artifacts.package.dependencies).includes(packageName)) return "sync";
-  return "config";
+  void packageName;
+  void artifacts;
+  return "package";
 }
 
 function nodeKindForPackage(packageName: string): GraphNode["kind"] {

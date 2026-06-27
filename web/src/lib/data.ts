@@ -16,6 +16,7 @@ export type EdgeKind =
   | "sync"
   | "async"
   | "db"
+  | "package"
   | "config"
   | "auth"
   | "webhook";
@@ -31,6 +32,9 @@ export interface GraphNode {
   confidence: Confidence;
   risks: string[];
   path?: string;
+  repositoryId?: string;
+  scanId?: string;
+  evidence?: Evidence[];
 }
 
 export interface GraphLink {
@@ -48,11 +52,24 @@ export interface GraphLink {
   risks: string[];
   confidence: Confidence;
   beforeYouChange?: string;
+  repositoryId?: string;
+  scanId?: string;
+  evidence?: Evidence[];
 }
 
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
+}
+
+export interface Evidence {
+  id?: string;
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+  snippet: string;
+  detector: string;
+  confidenceReason: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +101,7 @@ export const EDGE_KIND_META: Record<
   sync:    { label: "Sync API call",       color: "#8b8d98", dashed: false },
   async:   { label: "Async / queue",       color: "#60a5fa", dashed: true  },
   db:      { label: "DB read/write",       color: "#60a5fa", dashed: false },
+  package: { label: "Package dependency",  color: "#34d399", dashed: false },
   config:  { label: "Shared config",       color: "#5c5e6a", dashed: true  },
   auth:    { label: "Auth delegation",     color: "#8b8d98", dashed: false },
   webhook: { label: "Webhook / callback",  color: "#fb923c", dashed: true  },
