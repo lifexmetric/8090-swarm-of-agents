@@ -52,6 +52,14 @@ function moduleNameForRelativeImport(sourceFilePath: string, importValue: string
   return moduleNameForFile(resolved);
 }
 
+function packageNameEvidence(findings: Finding[], packageName?: string): Evidence[] {
+  if (!packageName) return [];
+  return findings
+    .filter((finding) => finding.detector === "package-json-name" && finding.value === packageName)
+    .slice(0, 3)
+    .map(evidenceFromFinding);
+}
+
 function moduleNodeId(repositoryId: string, moduleName: string): string {
   return stableId("repo", repositoryId, "module", moduleName);
 }
@@ -134,6 +142,7 @@ export function buildGraphFromArtifacts(args: {
   const repoNodeId = stableId("repo", repository.id, "root");
   const repoDocs = firstEvidence(artifacts.findings, "doc");
   const packageEvidence = firstEvidence(artifacts.findings, "config", "package.json");
+  const directPackageNameEvidence = packageNameEvidence(artifacts.findings, artifacts.package.name);
   const repoPurpose = artifacts.package.name
     ? `${repository.owner}/${repository.name} appears to publish or run ${artifacts.package.name}.`
     : `${repository.owner}/${repository.name} repository root.`;
@@ -146,11 +155,11 @@ export function buildGraphFromArtifacts(args: {
     whatItIs: repoPurpose,
     whyItExists: "Repository root for the scanned codebase.",
     owns: [artifacts.package.name ?? repository.name],
-    confidence: repoDocs.length > 0 || packageEvidence.length > 0 ? "confirmed" : "inferred",
+    confidence: repoDocs.length > 0 || packageEvidence.length > 0 || directPackageNameEvidence.length > 0 ? "confirmed" : "inferred",
     risks: [],
     path: ".",
     repositoryId: repository.id,
-    evidence: [...repoDocs.slice(0, 3), ...packageEvidence.slice(0, 2)],
+    evidence: [...directPackageNameEvidence, ...repoDocs.slice(0, 3), ...packageEvidence.slice(0, 2)],
   });
 
   const sourceFindings = artifacts.findings.filter((finding) =>
@@ -258,6 +267,22 @@ export function buildGraphFromArtifacts(args: {
     const relativeModuleName = moduleNameForRelativeImport(finding.filePath, finding.value);
     if (relativeModuleName) {
       const target = moduleNodeId(repository.id, relativeModuleName);
+      if (nodes.has(sourceModule) && !nodes.has(target)) {
+        addNode(nodes, {
+          id: target,
+          label: relativeModuleName,
+          kind: "service",
+          domain: "Code",
+          whatItIs: `Local module referenced by relative import ${finding.value}.`,
+          whyItExists: "Imported by another source module inside the repository.",
+          owns: [],
+          confidence: "confirmed",
+          risks: [],
+          path: relativeModuleName,
+          repositoryId: repository.id,
+          evidence: [evidenceFromFinding(finding)],
+        });
+      }
       if (nodes.has(sourceModule) && nodes.has(target) && sourceModule !== target) {
         addLink(links, {
           id: stableId(repository.id, "relative-import", sourceModule, target, finding.value),

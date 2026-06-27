@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { AtlasRepository, migrate, openDatabase, type SqliteDatabase } from "../src/db/database.js";
-import { buildDurableMemoryFacts } from "../src/backboard/client.js";
+import { BackboardClient, buildDurableMemoryFacts } from "../src/backboard/client.js";
 import { buildWorkspaceGraph } from "../src/graph/workspace.js";
 import { buildHandoffMap, buildScanContext } from "../src/graph/context.js";
 import { buildGraphFromArtifacts } from "../src/graph/normalize.js";
@@ -18,6 +18,7 @@ import { compactForPrompt, redactSecrets } from "../src/util/redact.js";
 const fixtureRoot = path.resolve("tests/fixtures/sample-js");
 const FAKE_STRIPE_TOKEN = ["sk", "live", "1234567890", "1234567890", "1234567890"].join("_");
 const FAKE_ENV_TOKEN = ["sk", "live", "should_not_be_scanned"].join("_");
+const FAKE_PROBE_TOKEN = ["tok", "probe", "1234567890"].join("_");
 
 function fakeBackboard(): BackboardSynthesis {
   return {
@@ -88,12 +89,19 @@ describe("deterministic scanner", () => {
       `const apiKey = "${FAKE_STRIPE_TOKEN}"; axios.post("https://example.com", { apiKey });\n`,
     );
     await fs.writeFile(path.join(tempDir, ".env.local"), `BACKBOARD_API_KEY=${FAKE_ENV_TOKEN}\n`);
+    await fs.writeFile(path.join(tempDir, "src", "tokens.ts"), `export const credential = "${FAKE_PROBE_TOKEN}";\n`);
 
     const artifacts = await scanRepository(tempDir, { maxFiles: 100, maxFileBytes: 100_000 });
     const serialized = JSON.stringify(artifacts);
 
     expect(redactSecrets(`const apiKey = "${FAKE_STRIPE_TOKEN}";`)).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(redactSecrets(`const stripeKey = "${FAKE_PROBE_TOKEN}";`)).not.toContain(FAKE_PROBE_TOKEN);
+    expect(redactSecrets(`const credential = "${FAKE_PROBE_TOKEN}";`)).not.toContain(FAKE_PROBE_TOKEN);
+    expect(redactSecrets(`const clientSecret = "${FAKE_PROBE_TOKEN}";`)).not.toContain(FAKE_PROBE_TOKEN);
+    expect(redactSecrets(`const private_key = "${FAKE_PROBE_TOKEN}";`)).not.toContain(FAKE_PROBE_TOKEN);
+    expect(redactSecrets(`const accessToken = "${FAKE_PROBE_TOKEN}";`)).not.toContain(FAKE_PROBE_TOKEN);
     expect(serialized).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(serialized).not.toContain(FAKE_PROBE_TOKEN);
     expect(serialized).not.toContain(FAKE_ENV_TOKEN);
     expect(artifacts.files.some((file) => file.path.includes(".env"))).toBe(false);
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -151,6 +159,32 @@ describe("graph normalization", () => {
     expect(allEvidence.every((evidence) => evidence.id)).toBe(true);
     expect(relativeImportLink).toBeTruthy();
     expect(relativeImportLink?.evidence?.[0]?.id).toBeTruthy();
+  });
+
+  it("creates relative-import target nodes for otherwise quiet utility files", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-relative-import-"));
+    await fs.mkdir(path.join(tempDir, "src"), { recursive: true });
+    await fs.writeFile(path.join(tempDir, "package.json"), JSON.stringify({ name: "@atlas/relative-fixture" }, null, 2));
+    await fs.writeFile(path.join(tempDir, "src", "server.ts"), 'import { helper } from "./helper";\nconsole.log(helper());\n');
+    await fs.writeFile(path.join(tempDir, "src", "helper.ts"), "export function helper() { return 1; }\n");
+
+    const artifacts = await scanRepository(tempDir, { maxFiles: 100, maxFileBytes: 100_000 });
+    const relativeFindings = artifacts.findings.filter(
+      (finding) => finding.kind === "import" && finding.detector === "relative-import",
+    );
+    const graph = buildGraphFromArtifacts({
+      repository: repoRecord("repo_relative", "@atlas/relative-fixture"),
+      commitSha: "abc1234",
+      artifacts,
+      backboard: fakeBackboard(),
+    });
+    const relativeImportLinks = graph.links.filter((link) => link.contract.startsWith("Relative import path:"));
+
+    expect(relativeFindings).toHaveLength(1);
+    expect(relativeImportLinks).toHaveLength(relativeFindings.length);
+    expect(graph.nodes.some((node) => node.label === "helper")).toBe(true);
+    expect(relativeImportLinks[0].evidence?.[0]?.id).toBe(relativeFindings[0].id);
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it("builds a handoff map from evidence files to graph nodes and edges", async () => {
@@ -244,6 +278,7 @@ describe("Backboard payload safety", () => {
       path.join(tempDir, "src", "client.ts"),
       `const apiKey = "${FAKE_STRIPE_TOKEN}"; axios.post("https://example.com", { apiKey });\n`,
     );
+    await fs.writeFile(path.join(tempDir, "src", "tokens.ts"), `export const stripeKey = "${FAKE_PROBE_TOKEN}";\n`);
 
     const artifacts = await scanRepository(tempDir, { maxFiles: 100, maxFileBytes: 100_000 });
     const promptPayload = compactForPrompt({ findings: artifacts.findings, selectedSnippets: artifacts.selectedSnippets }, 20_000);
@@ -251,15 +286,72 @@ describe("Backboard payload safety", () => {
     const serializedFacts = JSON.stringify(facts);
 
     expect(promptPayload).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(promptPayload).not.toContain(FAKE_PROBE_TOKEN);
     expect(serializedFacts).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(serializedFacts).not.toContain(FAKE_PROBE_TOKEN);
     expect(facts.length).toBeGreaterThan(0);
     expect(facts.every((fact) => fact.evidenceIds.length > 0 && fact.evidenceRefs.length > 0)).toBe(true);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
+
+  it("disables Backboard memory on advisory synthesis requests", async () => {
+    const artifacts = await scanRepository(fixtureRoot, { maxFiles: 100, maxFileBytes: 100_000 });
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      requestBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      if (url.endsWith("/threads/messages")) {
+        return new Response(JSON.stringify({ thread_id: "thread_test", run_id: "run_test", content: "{}" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/assistants/asst_test/memories")) {
+        return new Response(JSON.stringify({ id: "mem_test" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ id: "unexpected" }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const client = new BackboardClient(
+        loadConfig({
+          backboardApiKey: "test-key",
+          backboardApiBase: "https://backboard.test",
+          backboardMemoryMode: "Auto",
+        }),
+      );
+      await client.synthesizeScan({
+        assistantId: "asst_test",
+        repository: repoRecord(),
+        commitSha: "abc1234",
+        artifacts,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requestBodies[0].memory).toBe("Off");
+    expect(String(requestBodies[1].content)).toContain("evidence-indexed facts");
+  });
 });
 
 describe("workspace graph merge", () => {
-  it("creates supported package-level cross-repo edges", () => {
+  it("creates supported package-level cross-repo edges from normalized scan graphs", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-cross-repo-"));
+    const sourceRoot = path.join(tempDir, "app");
+    const targetRoot = path.join(tempDir, "plugin");
+    await fs.mkdir(sourceRoot, { recursive: true });
+    await fs.mkdir(targetRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(sourceRoot, "package.json"),
+      JSON.stringify({ name: "@atlas/app", dependencies: { "fastify-plugin": "^5.0.0" } }, null, 2),
+    );
+    await fs.writeFile(path.join(targetRoot, "package.json"), JSON.stringify({ name: "fastify-plugin" }, null, 2));
+
     const sourceRepo: RepositoryRecord = {
       ...repoRecord("repo_app", "@atlas/app"),
       name: "app",
@@ -273,9 +365,33 @@ describe("workspace graph merge", () => {
       url: "https://github.com/fastify/fastify-plugin",
       cloneUrl: "https://github.com/fastify/fastify-plugin.git",
     };
+    const sourceArtifacts = await scanRepository(sourceRoot, { maxFiles: 100, maxFileBytes: 100_000 });
+    const targetArtifacts = await scanRepository(targetRoot, { maxFiles: 100, maxFileBytes: 100_000 });
+    const graphA = buildGraphFromArtifacts({ repository: sourceRepo, commitSha: "a", artifacts: sourceArtifacts });
+    const graphB = buildGraphFromArtifacts({ repository: packageRepo, commitSha: "b", artifacts: targetArtifacts });
+
+    const workspace = buildWorkspaceGraph({
+      workspaceId: "test",
+      repositories: [sourceRepo, packageRepo],
+      scans: [
+        { id: "scan_a", workspaceId: "test", repositoryId: sourceRepo.id, repoUrl: sourceRepo.url, status: "completed", graph: graphA, createdAt: "", commitSha: "a" },
+        { id: "scan_b", workspaceId: "test", repositoryId: packageRepo.id, repoUrl: packageRepo.url, status: "completed", graph: graphB, createdAt: "", commitSha: "b" },
+      ],
+    });
+
+    expect(workspace.crossRepoConnections).toHaveLength(1);
+    expect(workspace.crossRepoConnections[0].sourceEvidence.every((item) => item.detector === "package-json-dependency")).toBe(true);
+    expect(workspace.crossRepoConnections[0].targetEvidence.every((item) => item.detector === "package-json-name")).toBe(true);
+    expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(true);
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("does not emit cross-repo produced-by edges without direct target package-name evidence", () => {
+    const sourceRepo = repoRecord("repo_app", "@atlas/app");
+    const targetRepo = repoRecord("repo_target", "fastify-plugin");
     const graphA: GraphData = {
       nodes: [
-        { id: "app-root", label: "atlas/app", kind: "service", domain: "Repository", whatItIs: "app", whyItExists: "test", owns: [], confidence: "confirmed", risks: [], repositoryId: sourceRepo.id, evidence: [{ id: "ev-app-root", filePath: "package.json", lineStart: 1, lineEnd: 1, snippet: "{}", detector: "test", confidenceReason: "test" }] },
+        { id: "app-root", label: "atlas/sample-service", kind: "service", domain: "Repository", whatItIs: "app", whyItExists: "test", owns: [], confidence: "confirmed", risks: [], repositoryId: sourceRepo.id, evidence: [] },
         { id: "dep-fastify-plugin", label: "fastify-plugin", kind: "external", domain: "Dependency", whatItIs: "dep", whyItExists: "test", owns: [], confidence: "confirmed", risks: [], repositoryId: sourceRepo.id, evidence: [] },
       ],
       links: [
@@ -299,24 +415,22 @@ describe("workspace graph merge", () => {
     };
     const graphB: GraphData = {
       nodes: [
-        { id: "plugin-root", label: "fastify/fastify-plugin", kind: "service", domain: "Repository", whatItIs: "plugin", whyItExists: "test", owns: [], confidence: "confirmed", risks: [], repositoryId: packageRepo.id, evidence: [{ id: "ev-target-package", filePath: "package.json", lineStart: 2, lineEnd: 2, snippet: "\"name\": \"fastify-plugin\"", detector: "package-json-name", confidenceReason: "test" }] },
+        { id: "target-root", label: "atlas/sample-service", kind: "service", domain: "Repository", whatItIs: "target", whyItExists: "test", owns: [], confidence: "confirmed", risks: [], repositoryId: targetRepo.id, evidence: [{ id: "ev-generic", filePath: "package.json", lineStart: 1, lineEnd: 1, snippet: "{}", detector: "config-file", confidenceReason: "generic config" }] },
       ],
       links: [],
     };
 
     const workspace = buildWorkspaceGraph({
       workspaceId: "test",
-      repositories: [sourceRepo, packageRepo],
+      repositories: [sourceRepo, targetRepo],
       scans: [
         { id: "scan_a", workspaceId: "test", repositoryId: sourceRepo.id, repoUrl: sourceRepo.url, status: "completed", graph: graphA, createdAt: "", commitSha: "a" },
-        { id: "scan_b", workspaceId: "test", repositoryId: packageRepo.id, repoUrl: packageRepo.url, status: "completed", graph: graphB, createdAt: "", commitSha: "b" },
+        { id: "scan_b", workspaceId: "test", repositoryId: targetRepo.id, repoUrl: targetRepo.url, status: "completed", graph: graphB, createdAt: "", commitSha: "b" },
       ],
     });
 
-    expect(workspace.crossRepoConnections).toHaveLength(1);
-    expect(workspace.crossRepoConnections[0].sourceEvidence.map((item) => item.id)).toContain("ev-source-dep");
-    expect(workspace.crossRepoConnections[0].targetEvidence.map((item) => item.id)).toContain("ev-target-package");
-    expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(true);
+    expect(workspace.crossRepoConnections).toHaveLength(0);
+    expect(workspace.links.some((link) => link.contract.includes("Cross-repo package relationship"))).toBe(false);
   });
 });
 
@@ -470,6 +584,7 @@ describe("API route schemas", () => {
       path.join(fixtureDir, "src", "client.ts"),
       `const apiKey = "${FAKE_STRIPE_TOKEN}"; axios.post("https://example.com", { apiKey });\n`,
     );
+    await fs.writeFile(path.join(fixtureDir, "src", "tokens.ts"), `export const stripeKey = "${FAKE_PROBE_TOKEN}";\n`);
     const db = openDatabase(path.join(tempDir, "atlas.db"));
     migrate(db);
     const repository = new AtlasRepository(db);
@@ -509,6 +624,7 @@ describe("API route schemas", () => {
     expect(body.files.map((file: { path: string }) => file.path)).toContain("handoff/handoff-map.json");
     expect(body.files.map((file: { path: string }) => file.path)).toContain("backboard/backboard-record.json");
     expect(serialized).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(serialized).not.toContain(FAKE_PROBE_TOKEN);
     await app.close();
     db.close();
     await fs.rm(tempDir, { recursive: true, force: true });

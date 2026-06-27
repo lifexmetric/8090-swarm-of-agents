@@ -13,15 +13,10 @@ function evidenceForPackageDependency(graph: GraphData, packageName: string): Ev
 }
 
 function evidenceForProducedPackage(graph: GraphData, repo: RepositoryRecord, packageName: string): Evidence[] {
-  const packageNameEvidence = graph.nodes
+  return graph.nodes
     .filter((node) => node.repositoryId === repo.id)
     .flatMap((node) => node.evidence ?? [])
-    .filter((evidence) => evidence.detector === "package-json-name" && evidence.snippet.includes(packageName));
-  if (packageNameEvidence.length > 0) return packageNameEvidence.slice(0, 6);
-
-  return graph.nodes
-    .filter((node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`)
-    .flatMap((node) => node.evidence ?? [])
+    .filter((evidence) => evidence.detector === "package-json-name" && evidence.snippet.includes(packageName))
     .slice(0, 6);
 }
 
@@ -65,6 +60,7 @@ export function buildWorkspaceGraph(args: {
 
       const sourceEvidence = evidenceForPackageDependency(graph, packageName);
       const targetEvidence = targetGraph ? evidenceForProducedPackage(targetGraph, targetRepo, packageName) : [];
+      if (sourceEvidence.length === 0 || targetEvidence.length === 0) continue;
       const evidence = [...sourceEvidence, ...targetEvidence];
       const id = stableId("cross-repo", sourceRepo.id, targetRepo.id, packageName);
       crossRepoConnections.push({
@@ -91,7 +87,7 @@ export function buildWorkspaceGraph(args: {
         contract: `Cross-repo package relationship: ${packageName}`,
         failure: "Version mismatch or package publishing failure can break the dependent repository.",
         risks: [],
-        confidence: sourceEvidence.length > 0 && targetEvidence.length > 0 ? "confirmed" : "inferred",
+        confidence: "confirmed",
         evidence,
       });
     }

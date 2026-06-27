@@ -222,7 +222,7 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
       assistant_id: args.assistantId,
       role: "user",
       content: prompt,
-      memory: this.config.backboardMemoryMode,
+      memory: "Off",
       metadata: {
         product: "atlas",
         repositoryId: args.repository.id,

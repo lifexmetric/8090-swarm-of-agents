@@ -1,13 +1,14 @@
-const SECRET_KEY_WORD = "api[_-]?key|token|secret|password|passwd|private[_-]?key|client[_-]?secret|access[_-]?key";
+const SECRET_KEY_WORD =
+  "api[_-]?key|apikey|token|secret|password|passwd|credential|credentials|private[_-]?key|privatekey|client[_-]?secret|clientsecret|access[_-]?key|accesskey|access[_-]?token|accesstoken|refresh[_-]?token|refreshtoken|session[_-]?token|sessiontoken|stripe[_-]?key|stripekey";
 const SECRET_NAME = new RegExp(SECRET_KEY_WORD, "i");
 const LONG_TOKEN = /(["'=:\s])([A-Za-z0-9_\-./+=]{28,})(["'\s,;)}\]]?)/g;
-const KNOWN_TOKEN_PREFIX = /\b((?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_]{8,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b/g;
+const KNOWN_TOKEN_PREFIX = /\b((?:sk|pk|rk|tok)_(?:live|test|probe)_[A-Za-z0-9_]{8,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b/g;
 const SECRET_ASSIGNMENT = new RegExp(
-  `((?:${SECRET_KEY_WORD})\\w*["']?\\s*[:=]\\s*["'])([^"'\\n;,)]+)(["'])`,
+  `((?:[A-Za-z0-9_$]*?(?:${SECRET_KEY_WORD})[A-Za-z0-9_$]*?)["']?\\s*[:=]\\s*["'])([^"'\\n;,)]+)(["'])`,
   "gi",
 );
 const SECRET_OBJECT_VALUE = new RegExp(
-  `(["']?(?:${SECRET_KEY_WORD})\\w*["']?\\s*:\\s*["'])([^"'\\n;,)]+)(["'])`,
+  `(["']?[A-Za-z0-9_$]*?(?:${SECRET_KEY_WORD})[A-Za-z0-9_$]*?["']?\\s*:\\s*["'])([^"'\\n;,)]+)(["'])`,
   "gi",
 );
 
