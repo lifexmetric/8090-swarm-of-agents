@@ -4,7 +4,9 @@ const CONFIGURED_ATLAS_API_URL = process.env.NEXT_PUBLIC_ATLAS_API_URL?.trim();
 const DEFAULT_LOCAL_API_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
 
 export const ATLAS_API_URL = (CONFIGURED_ATLAS_API_URL || DEFAULT_LOCAL_API_URL).replace(/\/$/, "");
-export const ATLAS_API_CONFIGURED = Boolean(ATLAS_API_URL);
+// In production the API is always available via relative URL (Vercel serverless function).
+// In dev it is only available when an explicit URL or localhost default is configured.
+export const ATLAS_API_CONFIGURED = process.env.NODE_ENV === "production" || Boolean(ATLAS_API_URL);
 const API_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
 export const DEFAULT_WORKSPACE_ID = process.env.NEXT_PUBLIC_ATLAS_WORKSPACE_ID?.trim() || "local-dev";
 export const ATLAS_WORKSPACE_ID = DEFAULT_WORKSPACE_ID;
