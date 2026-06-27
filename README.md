@@ -103,6 +103,7 @@ npm run dev
 
 The default API URL is `http://127.0.0.1:3001`. SQLite is stored at
 `.atlas/atlas.db` from `DATABASE_URL=file:./.atlas/atlas.db`.
+The frontend reads the API URL from `NEXT_PUBLIC_ATLAS_API_URL`.
 
 ### Required API Endpoints
 
@@ -156,6 +157,7 @@ Backend checks:
 cd api
 npm run typecheck
 npm test
+npm run build
 ```
 
 Frontend checks:

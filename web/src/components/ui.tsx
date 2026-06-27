@@ -6,6 +6,11 @@ export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
+/** Semi-transparent tint for CSS-var or hex colors */
+export function colorAlpha(color: string, pct: number) {
+  return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+}
+
 // ── Logo ────────────────────────────────────────────────────────────────────
 export function Logo({ className }: { className?: string }) {
   return (
@@ -14,14 +19,17 @@ export function Logo({ className }: { className?: string }) {
       className={cn("group inline-flex items-center gap-2.5", className)}
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-        <circle cx="12" cy="5"  r="2" fill="#e8e9ed" />
-        <circle cx="5"  cy="17" r="2" fill="#818cf8" />
-        <circle cx="19" cy="17" r="2" fill="#fb923c" />
-        <circle cx="12" cy="12" r="1.5" fill="#5c5e6a" />
+        <circle cx="12" cy="5"  r="2" fill="var(--color-node-service)" />
+        <circle cx="5"  cy="17" r="2" fill="var(--color-accent)" />
+        <circle cx="19" cy="17" r="2" fill="var(--color-node-external)" />
+        <circle cx="12" cy="12" r="1.5" fill="var(--color-faint)" />
         <path d="M12 12 L12 5 M12 12 L5 17 M12 12 L19 17"
-          stroke="#3a3c48" strokeWidth="1.2" />
+          stroke="var(--color-line-2)" strokeWidth="1.2" />
       </svg>
-      <span className="text-[15px] font-semibold tracking-tight text-[#e8e9ed]">
+      <span
+        className="text-[15px] font-semibold tracking-tight"
+        style={{ color: "var(--color-ink)" }}
+      >
         Atlas
       </span>
     </Link>
@@ -56,15 +64,15 @@ export function Btn({
   disabled?: boolean;
 }) {
   const base =
-    "inline-flex cursor-pointer items-center gap-2 font-medium transition-colors duration-[150ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#818cf8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0d10] disabled:opacity-40 disabled:pointer-events-none";
+    "inline-flex cursor-pointer items-center gap-2 font-medium transition-colors duration-[150ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-40 disabled:pointer-events-none";
   const sizes = {
     sm: "px-3 py-1.5 text-[13px] rounded-md",
     md: "px-4 py-2 text-sm rounded-lg",
   };
   const variants = {
-    primary:   "bg-[#818cf8] text-white hover:bg-[#6366f1]",
-    secondary: "border border-[#3a3c48] text-[#8b8d98] hover:border-[#5c5e6a] hover:text-[#e8e9ed] bg-transparent",
-    ghost:     "text-[#8b8d98] hover:text-[#e8e9ed] bg-transparent",
+    primary:   "bg-accent text-white hover:opacity-90",
+    secondary: "border border-line-2 text-muted hover:border-faint hover:text-ink bg-transparent",
+    ghost:     "text-muted hover:text-ink bg-transparent",
   };
   return (
     <button
@@ -86,8 +94,8 @@ export function ConfidenceBadge({ value }: { value: Confidence }) {
       className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide"
       style={{
         color: meta.color,
-        borderColor: `${meta.color}44`,
-        backgroundColor: `${meta.color}12`,
+        borderColor: colorAlpha(meta.color, 27),
+        backgroundColor: colorAlpha(meta.color, 7),
       }}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
@@ -101,7 +109,7 @@ export function Tag({ color, children }: { color: string; children: React.ReactN
   return (
     <span
       className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide"
-      style={{ color, borderColor: `${color}44`, backgroundColor: `${color}10` }}
+      style={{ color, borderColor: colorAlpha(color, 27), backgroundColor: colorAlpha(color, 6) }}
     >
       {children}
     </span>
@@ -111,7 +119,7 @@ export function Tag({ color, children }: { color: string; children: React.ReactN
 // ── Section label ────────────────────────────────────────────────────────────
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#5c5e6a]">
+    <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-faint">
       {children}
     </h4>
   );
@@ -120,8 +128,8 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 // ── Risk row ─────────────────────────────────────────────────────────────────
 export function RiskRow({ text }: { text: string }) {
   return (
-    <li className="flex items-start gap-2.5 text-sm text-[#8b8d98]">
-      <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#fbbf24]" fill="currentColor" aria-hidden="true">
+    <li className="flex items-start gap-2.5 text-sm text-muted">
+      <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" fill="currentColor" aria-hidden="true">
         <path fillRule="evenodd" d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l5.57 10.433c.62 1.16-.162 2.52-1.544 2.52H2.43c-1.382 0-2.164-1.36-1.544-2.52zM8 5a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-2.5A.75.75 0 0 1 8 5zm0 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" clipRule="evenodd" />
       </svg>
       <span>{text}</span>
@@ -132,14 +140,14 @@ export function RiskRow({ text }: { text: string }) {
 // ── Code block ───────────────────────────────────────────────────────────────
 export function CodeBlock({ code, caption }: { code: string; caption?: string }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[#2a2c36] bg-[#12131a]">
+    <div className="overflow-hidden rounded-lg border border-line bg-code-bg">
       {caption && (
-        <div className="border-b border-[#2a2c36] px-3 py-1.5 font-mono text-[11px] text-[#5c5e6a]">
+        <div className="border-b border-line px-3 py-1.5 font-mono text-[11px] text-faint">
           {caption}
         </div>
       )}
       <pre className="scroll-thin overflow-x-auto p-4 text-[12.5px] leading-relaxed">
-        <code className="font-mono text-[#a5b4fc]">{code}</code>
+        <code className="font-mono text-code">{code}</code>
       </pre>
     </div>
   );

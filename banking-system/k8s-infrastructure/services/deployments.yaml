@@ -1,0 +1,406 @@
+---
+# api-gateway
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: banking-system
+  labels:
+    app: api-gateway
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: bank/api-gateway:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# auth-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: banking-system
+  labels:
+    app: auth-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: bank/auth-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# accounts-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: accounts-service
+  namespace: banking-system
+  labels:
+    app: accounts-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: accounts-service
+  template:
+    metadata:
+      labels:
+        app: accounts-service
+    spec:
+      containers:
+        - name: accounts-service
+          image: bank/accounts-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# payments-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service
+  namespace: banking-system
+  labels:
+    app: payments-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments-service
+  template:
+    metadata:
+      labels:
+        app: payments-service
+    spec:
+      containers:
+        - name: payments-service
+          image: bank/payments-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# fraud-detection-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-detection-service
+  namespace: banking-system
+  labels:
+    app: fraud-detection-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fraud-detection-service
+  template:
+    metadata:
+      labels:
+        app: fraud-detection-service
+    spec:
+      containers:
+        - name: fraud-detection-service
+          image: bank/fraud-detection-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# customer-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-service
+  namespace: banking-system
+  labels:
+    app: customer-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: customer-service
+  template:
+    metadata:
+      labels:
+        app: customer-service
+    spec:
+      containers:
+        - name: customer-service
+          image: bank/customer-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+# notification-service (replicas: 1, no HTTP probe — Kafka consumer only)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: banking-system
+  labels:
+    app: notification-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: bank/notification-service:latest
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+# reporting-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting-service
+  namespace: banking-system
+  labels:
+    app: reporting-service
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reporting-service
+  template:
+    metadata:
+      labels:
+        app: reporting-service
+    spec:
+      containers:
+        - name: reporting-service
+          image: bank/reporting-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: banking-secrets
+            - configMapRef:
+                name: banking-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3

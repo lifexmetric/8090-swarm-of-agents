@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: banking-config
+  namespace: banking-system
+  labels:
+    app.kubernetes.io/part-of: banking-system
+data:
+  # PostgreSQL — auth database
+  POSTGRES_AUTH_HOST: postgres-auth.banking-system.svc.cluster.local
+  POSTGRES_AUTH_PORT: "5432"
+  POSTGRES_AUTH_DB: auth_db
+  POSTGRES_AUTH_USER: auth_user
+
+  # PostgreSQL — bank database (accounts + payments)
+  POSTGRES_BANK_HOST: postgres-bank.banking-system.svc.cluster.local
+  POSTGRES_BANK_PORT: "5432"
+  POSTGRES_BANK_DB: bank_db
+  POSTGRES_BANK_USER: bank_user
+
+  # Redis
+  REDIS_HOST: redis.banking-system.svc.cluster.local
+  REDIS_PORT: "6379"
+
+  # MongoDB
+  MONGODB_HOST: mongodb.banking-system.svc.cluster.local
+  MONGODB_PORT: "27017"
+  MONGODB_DB: customers_db
+
+  # Neo4j
+  NEO4J_URI: bolt://neo4j.banking-system.svc.cluster.local:7687
+
+  # Kafka
+  KAFKA_BOOTSTRAP_SERVERS: kafka.banking-system.svc.cluster.local:9092
+
+  # Kafka topic names
+  KAFKA_TOPIC_PAYMENT_INITIATED: payment.initiated
+  KAFKA_TOPIC_PAYMENT_COMPLETED: payment.completed
+  KAFKA_TOPIC_PAYMENT_FAILED: payment.failed
+  KAFKA_TOPIC_FRAUD_ALERT: fraud.alert
+  KAFKA_TOPIC_ACCOUNT_UPDATED: account.updated
+  KAFKA_TOPIC_NOTIFICATION_EMAIL: notification.email
+  KAFKA_TOPIC_NOTIFICATION_SMS: notification.sms
+
+  # Internal service URLs (cluster DNS)
+  AUTH_SERVICE_URL: http://auth-service.banking-system.svc.cluster.local:3000
+  ACCOUNTS_SERVICE_URL: http://accounts-service.banking-system.svc.cluster.local:3000
+  PAYMENTS_SERVICE_URL: http://payments-service.banking-system.svc.cluster.local:3000
+  FRAUD_DETECTION_SERVICE_URL: http://fraud-detection-service.banking-system.svc.cluster.local:3000
+  CUSTOMER_SERVICE_URL: http://customer-service.banking-system.svc.cluster.local:3000
+  NOTIFICATION_SERVICE_URL: http://notification-service.banking-system.svc.cluster.local:3000
+  REPORTING_SERVICE_URL: http://reporting-service.banking-system.svc.cluster.local:3000
+
+  # Feature flags
+  MOCK_EXTERNAL: "false"
+
+  # Application settings
+  NODE_ENV: production
+  LOG_LEVEL: info
+  JWT_EXPIRES_IN: 1h
+  REFRESH_TOKEN_EXPIRES_IN: 7d

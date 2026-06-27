@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-bank
+  namespace: banking-system
+  labels:
+    app: postgres-bank
+    app.kubernetes.io/part-of: banking-system
+spec:
+  serviceName: postgres-bank
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-bank
+  template:
+    metadata:
+      labels:
+        app: postgres-bank
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: bank_db
+            - name: POSTGRES_USER
+              value: bank_user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: postgres-bank-password
+          volumeMounts:
+            - name: postgres-bank-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - bank_user
+                - -d
+                - bank_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - bank_user
+                - -d
+                - bank_db
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-bank-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: managed-csi
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-bank
+  namespace: banking-system
+  labels:
+    app: postgres-bank
+    app.kubernetes.io/part-of: banking-system
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres-bank
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres

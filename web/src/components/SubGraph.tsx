@@ -3,18 +3,15 @@
 import * as React from "react";
 import {
   dependenciesOf,
-  dependenciesOfIn,
   dependentsOf,
-  dependentsOfIn,
   EDGE_KIND_META,
-  GRAPH,
-  type GraphData,
   NODE_KIND_META,
   nodeById,
-  nodeByIdIn,
+  type GraphData,
   type GraphLink,
   type GraphNode,
 } from "@/lib/data";
+import { colorAlpha } from "./ui";
 
 // ── Layout constants ─────────────────────────────────────────────────────────
 const SVG_W = 336;
@@ -60,7 +57,7 @@ interface EdgePos {
 
 interface SubGraphProps {
   node: GraphNode;
-  graph?: GraphData;
+  graphData: GraphData;
   onSelectNode: (id: string) => void;
 }
 
@@ -71,17 +68,16 @@ const LEAF_MESSAGES: Partial<Record<string, string>> = {
   queue: "Message broker — routes events but holds no downstream logic",
 };
 
-export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
+export function SubGraph({ node, graphData, onSelectNode }: SubGraphProps) {
   const [hoveredEdge, setHoveredEdge] = React.useState<string | null>(null);
-  const isMockGraph = graph === GRAPH;
-  const depLinks = isMockGraph ? dependenciesOf(node.id) : dependenciesOfIn(graph, node.id);
+  const depLinks = dependenciesOf(node.id, graphData);
   const depNodes = depLinks
-    .map((l) => (isMockGraph ? nodeById(l.target) : nodeByIdIn(graph, l.target)))
+    .map((l) => nodeById(l.target, graphData))
     .filter((n): n is GraphNode => !!n);
 
-  const inLinks = isMockGraph ? dependentsOf(node.id) : dependentsOfIn(graph, node.id);
+  const inLinks = dependentsOf(node.id, graphData);
   const inNodes = inLinks
-    .map((l) => (isMockGraph ? nodeById(l.source) : nodeByIdIn(graph, l.source)))
+    .map((l) => nodeById(l.source, graphData))
     .filter((n): n is GraphNode => !!n);
 
   // Leaf-node empty state
@@ -95,8 +91,8 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
         <span
           className="mb-3 flex h-10 w-10 items-center justify-center border"
           style={{
-            borderColor: `${meta.color}44`,
-            backgroundColor: `${meta.color}10`,
+            borderColor: colorAlpha(meta.color, 27),
+            backgroundColor: colorAlpha(meta.color, 6),
           }}
         >
           <span
@@ -106,10 +102,10 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             {node.label.slice(0, 2).toUpperCase()}
           </span>
         </span>
-        <p className="font-mono text-[12px] font-semibold text-[#e8e9ed]">
+        <p className="font-mono text-[12px] font-semibold text-ink">
           {node.label}
         </p>
-        <p className="mt-2 text-[12px] leading-relaxed text-[#555]">{msg}</p>
+        <p className="mt-2 text-[12px] leading-relaxed text-faint">{msg}</p>
       </div>
     );
   }
@@ -188,7 +184,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             refY="3.5"
             orient="auto"
           >
-            <path d="M0,1 L6,3.5 L0,6 z" fill="#5c5e6a" />
+            <path d="M0,1 L6,3.5 L0,6 z" fill="var(--color-faint)" />
           </marker>
           <filter id="sg-glow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="2" result="blur" />
@@ -205,7 +201,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             x={SVG_W / 2}
             y={8}
             textAnchor="middle"
-            fill="#3a3c48"
+            fill="var(--color-line-2)"
             fontSize={8.5}
             fontFamily="monospace"
             letterSpacing="0.12em"
@@ -218,7 +214,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             x={SVG_W / 2}
             y={svgHeight - 1}
             textAnchor="middle"
-            fill="#3a3c48"
+            fill="var(--color-line-2)"
             fontSize={8.5}
             fontFamily="monospace"
             letterSpacing="0.12em"
@@ -243,7 +239,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             ? meta.color
             : crit >= 4
             ? meta.color
-            : `${meta.color}99`;
+            : colorAlpha(meta.color, 60);
           return (
             <g key={e.link.id}>
               <path
@@ -261,7 +257,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                 <text
                   x={midX + 6}
                   y={midY}
-                  fill="#f87171"
+                  fill="var(--color-err)"
                   fontSize={9}
                   dominantBaseline="middle"
                   opacity={0.8}
@@ -288,8 +284,8 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                     width={68}
                     height={18}
                     rx={3}
-                    fill="#181a22"
-                    stroke={`${meta.color}55`}
+                    fill="var(--color-surface)"
+                    stroke={colorAlpha(meta.color, 33)}
                     strokeWidth={1}
                   />
                   <text
@@ -315,7 +311,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
           y={centerY}
           width={CENTER_W}
           height={CENTER_H}
-          fill={`${centMeta.color}14`}
+          fill={colorAlpha(centMeta.color, 8)}
           stroke={centMeta.color}
           strokeWidth={1.5}
           rx={3}
@@ -352,12 +348,11 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                 y={y}
                 width={w}
                 height={h}
-                fill="#0a0a0a"
-                stroke={`${meta.color}55`}
+                fill="var(--color-bg)"
+                stroke={colorAlpha(meta.color, 33)}
                 strokeWidth={1}
                 rx={2}
-                className="transition-all duration-150 hover:fill-[#111116] hover:stroke-opacity-100"
-                style={{ transition: "fill 0.15s" }}
+                className="transition-all duration-150 hover:opacity-90"
               />
               {/* Hover highlight */}
               <rect
@@ -376,7 +371,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                 y={cy}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fill="#7a7d8a"
+                fill="var(--color-muted)"
                 fontSize={10}
                 fontFamily="monospace"
                 className="select-none"
@@ -392,13 +387,13 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
       {(depLinks.length > 0 || inLinks.length > 0) && (
         <div className="mt-3 space-y-1 px-1">
           {depLinks.map((link) => {
-            const target = nodeById(link.target);
+            const target = nodeById(link.target, graphData);
             const meta = EDGE_KIND_META[link.kind];
             return (
               <button
                 key={link.id}
                 onClick={() => target && onSelectNode(target.id)}
-                className="flex w-full cursor-pointer items-start gap-2.5 border border-[#1e2028] bg-[#0a0a0e] px-3 py-2 text-left transition-colors duration-150 hover:border-[#2a2c36] hover:bg-[#0e0f14]"
+                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface"
               >
                 <span
                   className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
@@ -406,8 +401,8 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11.5px] text-[#8b8d98]">→</span>
-                    <span className="truncate font-mono text-[12px] text-[#c5c7d0]">
+                    <span className="font-mono text-[11.5px] text-muted">→</span>
+                    <span className="truncate font-mono text-[12px] text-ink">
                       {target?.label ?? link.target}
                     </span>
                     <span
@@ -417,7 +412,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                       {meta.label}
                     </span>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] text-[#555]">
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-faint">
                     {link.summary}
                   </p>
                 </div>
@@ -425,13 +420,13 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
             );
           })}
           {inLinks.map((link) => {
-            const source = nodeById(link.source);
+            const source = nodeById(link.source, graphData);
             const meta = EDGE_KIND_META[link.kind];
             return (
               <button
                 key={link.id}
                 onClick={() => source && onSelectNode(source.id)}
-                className="flex w-full cursor-pointer items-start gap-2.5 border border-[#1e2028] bg-[#0a0a0e] px-3 py-2 text-left transition-colors duration-150 hover:border-[#2a2c36] hover:bg-[#0e0f14]"
+                className="flex w-full cursor-pointer items-start gap-2.5 border border-line bg-bg px-3 py-2 text-left transition-colors duration-150 hover:border-line-2 hover:bg-surface"
               >
                 <span
                   className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
@@ -439,8 +434,8 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11.5px] text-[#8b8d98]">←</span>
-                    <span className="truncate font-mono text-[12px] text-[#c5c7d0]">
+                    <span className="font-mono text-[11.5px] text-muted">←</span>
+                    <span className="truncate font-mono text-[12px] text-ink">
                       {source?.label ?? link.source}
                     </span>
                     <span
@@ -450,7 +445,7 @@ export function SubGraph({ node, graph = GRAPH, onSelectNode }: SubGraphProps) {
                       {meta.label}
                     </span>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] text-[#555]">
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-faint">
                     {link.summary}
                   </p>
                 </div>

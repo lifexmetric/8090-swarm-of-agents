@@ -1,0 +1,335 @@
+# NetworkPolicy definitions for the banking-system namespace.
+# Default posture: deny all inter-pod traffic, then selectively allow.
+# Each policy targets a specific workload as the traffic destination.
+
+---
+# Deny all ingress/egress by default across the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: banking-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Allow external ingress to api-gateway on port 3000
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-api-gateway
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 3000
+
+---
+# Allow api-gateway to reach downstream services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-gateway-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: accounts-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: payments-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: customer-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: reporting-service
+
+---
+# Allow auth-service to receive traffic from api-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-auth-service
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+
+---
+# Allow auth-service to reach postgres-auth and redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-auth-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres-auth
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+
+---
+# Allow accounts-service to receive traffic from api-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-accounts-service
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: accounts-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+
+---
+# Allow accounts-service to reach postgres-bank and kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-accounts-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: accounts-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres-bank
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+
+---
+# Allow payments-service to receive traffic from api-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-payments-service
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: payments-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+
+---
+# Allow payments-service to reach postgres-bank and kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-payments-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: payments-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres-bank
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+
+---
+# Allow fraud-detection-service to receive traffic from kafka (consumer; no HTTP ingress needed)
+# and to reach kafka and neo4j
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-fraud-detection-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: fraud-detection-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+    - to:
+        - podSelector:
+            matchLabels:
+              app: neo4j
+      ports:
+        - port: 7687
+
+---
+# Allow notification-service to reach kafka (consumer)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-notification-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: notification-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+
+---
+# Allow customer-service to receive traffic from api-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-customer-service
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: customer-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+
+---
+# Allow customer-service to reach mongodb
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-customer-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: customer-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - port: 27017
+
+---
+# Allow reporting-service to receive traffic from api-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-reporting-service
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: reporting-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+
+---
+# Allow reporting-service to reach postgres-bank
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-reporting-service-egress
+  namespace: banking-system
+spec:
+  podSelector:
+    matchLabels:
+      app: reporting-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres-bank
+      ports:
+        - port: 5432

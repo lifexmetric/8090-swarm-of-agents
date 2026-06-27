@@ -1,8 +1,44 @@
+# Dependencies — never commit
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# scan-engine model cache (~400 MB download)
+scan-engine/models/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Platform runtime data (contains encrypted API keys)
+platform/data/
+
+# Atlas runtime data
+.atlas/
+
+# Environment files with real values
 .env
 .env.*
 !.env.example
-.atlas/
-node_modules/
-dist/
-coverage/
+.env.local
+.env.*.local
+docker-compose.override.yml
+
+# macOS
 .DS_Store
+
+# Go build output
+banking-system/payments-service/payments-service
+banking-system/*/bin/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/settings.json
+.idea/

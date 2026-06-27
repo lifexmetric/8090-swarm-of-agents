@@ -1,11 +1,15 @@
-import type { Confidence, GraphData } from "./data";
+import type { Confidence, EdgeKind, GraphData, GraphLink, GraphNode, NodeKind } from "./data";
 
-export const ATLAS_API_URL =
-  process.env.NEXT_PUBLIC_ATLAS_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:3001";
-const ATLAS_API_AUTH_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
+export const ATLAS_API_URL = (process.env.NEXT_PUBLIC_ATLAS_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+const API_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
+export const DEFAULT_WORKSPACE_ID = process.env.NEXT_PUBLIC_ATLAS_WORKSPACE_ID?.trim() || "local-dev";
+export const ATLAS_WORKSPACE_ID = DEFAULT_WORKSPACE_ID;
 
-export const ATLAS_WORKSPACE_ID =
-  process.env.NEXT_PUBLIC_ATLAS_WORKSPACE_ID?.trim() || "default";
+const NODE_KINDS = new Set<NodeKind>(["service", "external", "database", "queue", "auth", "config"]);
+const EDGE_KINDS = new Set<EdgeKind>(["sync", "async", "db", "package", "config", "auth", "webhook"]);
+const CONFIDENCE = new Set<Confidence>(["confirmed", "inferred", "uncertain"]);
+
+export type ScanStatus = "queued" | "running" | "completed" | "failed";
 
 export interface ScanRecord {
   id: string;
@@ -13,7 +17,7 @@ export interface ScanRecord {
   repositoryId: string;
   repoUrl: string;
   commitSha?: string | null;
-  status: "queued" | "running" | "completed" | "failed";
+  status: ScanStatus;
   error?: string | null;
   createdAt: string;
   startedAt?: string | null;
@@ -57,11 +61,18 @@ export interface ScanEvent {
   createdAt: string;
 }
 
-export interface ExportResponse {
+export interface ScanExportFile {
+  path: string;
+  markdown: string;
+}
+
+export interface ScanExport {
   scanId: string;
-  files: Array<{ path: string; markdown: string }>;
+  files: ScanExportFile[];
   combinedMarkdown: string;
 }
+
+export type ExportResponse = ScanExport;
 
 export interface ChatCitation {
   id: string;
@@ -106,48 +117,135 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${ATLAS_API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(ATLAS_API_AUTH_TOKEN ? { Authorization: `Bearer ${ATLAS_API_AUTH_TOKEN}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  const body = await response.text();
-  const parsed = body ? JSON.parse(body) : {};
-  if (!response.ok) {
-    throw new Error(parsed?.message ?? `Atlas API returned ${response.status}`);
+export class AtlasApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AtlasApiError";
+    this.status = status;
   }
-  return parsed as T;
 }
 
-export function createScan(repoUrl: string): Promise<ScanRecord> {
-  return apiJson<ScanRecord>("/api/scans", {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (API_TOKEN) headers.set("Authorization", `Bearer ${API_TOKEN}`);
+
+  const res = await fetch(`${ATLAS_API_URL}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = (await res.json()) as { message?: string; error?: string };
+      message = body.message ?? body.error ?? message;
+    } catch {
+      // Keep the HTTP status text when the API does not return JSON.
+    }
+    throw new AtlasApiError(message, res.status);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+function confidence(value: unknown): Confidence {
+  return typeof value === "string" && CONFIDENCE.has(value as Confidence)
+    ? (value as Confidence)
+    : "inferred";
+}
+
+function nodeKind(value: unknown): NodeKind {
+  return typeof value === "string" && NODE_KINDS.has(value as NodeKind)
+    ? (value as NodeKind)
+    : "service";
+}
+
+function edgeKind(value: unknown): EdgeKind {
+  return typeof value === "string" && EDGE_KINDS.has(value as EdgeKind)
+    ? (value as EdgeKind)
+    : "sync";
+}
+
+function text(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+export function normalizeGraph(graph: GraphData): GraphData {
+  return {
+    nodes: graph.nodes.map((node): GraphNode => ({
+      ...node,
+      id: text(node.id, "unknown-node"),
+      label: text(node.label, node.id),
+      kind: nodeKind(node.kind),
+      domain: text(node.domain, "Scanned repo"),
+      whatItIs: text(node.whatItIs, "Detected from repository scan evidence."),
+      whyItExists: text(node.whyItExists, "Part of the scanned repository structure."),
+      owns: Array.isArray(node.owns) ? node.owns : [],
+      confidence: confidence(node.confidence),
+      risks: Array.isArray(node.risks) ? node.risks : [],
+    })),
+    links: graph.links.map((link): GraphLink => ({
+      ...link,
+      id: text(link.id, `${link.source}-${link.target}`),
+      source: text(link.source, ""),
+      target: text(link.target, ""),
+      kind: edgeKind(link.kind),
+      criticality: Number.isFinite(link.criticality) ? link.criticality : 3,
+      summary: text(link.summary, "Detected relationship from repository scan evidence."),
+      code: text(link.code, "// No snippet available for this relationship yet."),
+      codePath: text(link.codePath, "No code path available"),
+      contract: text(link.contract, "No contract inferred yet."),
+      failure: text(link.failure, "No failure mode inferred yet."),
+      risks: Array.isArray(link.risks) ? link.risks : [],
+      confidence: confidence(link.confidence),
+      evidence: Array.isArray(link.evidence) ? link.evidence : [],
+    })),
+  };
+}
+
+export function createScan(repoUrl: string, workspaceId = DEFAULT_WORKSPACE_ID): Promise<ScanRecord> {
+  return request<ScanRecord>("/api/scans", {
     method: "POST",
-    body: JSON.stringify({ repoUrl }),
+    body: JSON.stringify({ repoUrl, workspaceId }),
   });
 }
 
 export function getScan(scanId: string): Promise<ScanRecord> {
-  return apiJson<ScanRecord>(`/api/scans/${encodeURIComponent(scanId)}`);
+  return request<ScanRecord>(`/api/scans/${encodeURIComponent(scanId)}`);
 }
 
-export function getScanEvents(scanId: string): Promise<{ scanId: string; events: ScanEvent[] }> {
-  return apiJson<{ scanId: string; events: ScanEvent[] }>(`/api/scans/${encodeURIComponent(scanId)}/events`);
+export async function getScanEvents(scanId: string): Promise<ScanEvent[]> {
+  const result = await request<{ scanId: string; events: ScanEvent[] }>(
+    `/api/scans/${encodeURIComponent(scanId)}/events`,
+  );
+  return result.events;
 }
 
-export function getScanGraph(scanId: string): Promise<GraphData> {
-  return apiJson<GraphData>(`/api/scans/${encodeURIComponent(scanId)}/graph`);
+export async function getScanGraph(scanId: string): Promise<GraphData> {
+  const graph = await request<GraphData>(`/api/scans/${encodeURIComponent(scanId)}/graph`);
+  return normalizeGraph(graph);
 }
 
-export function getWorkspaceGraph(workspaceId = ATLAS_WORKSPACE_ID): Promise<WorkspaceGraph> {
-  return apiJson<WorkspaceGraph>(`/api/workspaces/${encodeURIComponent(workspaceId)}/graph`);
+export async function getWorkspaceGraph(workspaceId = ATLAS_WORKSPACE_ID): Promise<WorkspaceGraph> {
+  const graph = await request<WorkspaceGraph>(`/api/workspaces/${encodeURIComponent(workspaceId)}/graph`);
+  return {
+    ...graph,
+    ...normalizeGraph(graph),
+    workspaceId: graph.workspaceId,
+    repositories: Array.isArray(graph.repositories) ? graph.repositories : [],
+    crossRepoConnections: Array.isArray(graph.crossRepoConnections) ? graph.crossRepoConnections : [],
+  };
 }
 
-export function getScanExport(scanId: string): Promise<ExportResponse> {
-  return apiJson<ExportResponse>(`/api/scans/${encodeURIComponent(scanId)}/export`);
+export function getScanExport(scanId: string): Promise<ScanExport> {
+  return request<ScanExport>(`/api/scans/${encodeURIComponent(scanId)}/export`);
 }
 
 export function createChatSession(input: {
@@ -155,14 +253,14 @@ export function createChatSession(input: {
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
 }): Promise<ChatSession> {
-  return apiJson<ChatSession>("/api/chat/sessions", {
+  return request<ChatSession>("/api/chat/sessions", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
 export function getChatMessages(sessionId: string): Promise<{ sessionId: string; messages: ChatMessage[] }> {
-  return apiJson<{ sessionId: string; messages: ChatMessage[] }>(
+  return request<{ sessionId: string; messages: ChatMessage[] }>(
     `/api/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
   );
 }
@@ -171,7 +269,7 @@ export function sendChatMessage(
   sessionId: string,
   input: { content: string; nodeId?: string | null; edgeId?: string | null; scanId?: string | null },
 ): Promise<{ session: ChatSession; userMessage: ChatMessage; assistantMessage: ChatMessage }> {
-  return apiJson<{ session: ChatSession; userMessage: ChatMessage; assistantMessage: ChatMessage }>(
+  return request<{ session: ChatSession; userMessage: ChatMessage; assistantMessage: ChatMessage }>(
     `/api/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
     {
       method: "POST",

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neo4j
+  namespace: banking-system
+  labels:
+    app: neo4j
+    app.kubernetes.io/part-of: banking-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+        - name: neo4j
+          image: neo4j:5
+          ports:
+            - containerPort: 7474
+              name: http
+            - containerPort: 7687
+              name: bolt
+          env:
+            - name: NEO4J_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: neo4j-password
+            - name: NEO4J_PLUGINS
+              value: '["apoc"]'
+            - name: NEO4J_dbms_security_procedures_unrestricted
+              value: apoc.*
+            - name: NEO4J_dbms_security_procedures_allowlist
+              value: apoc.*
+          volumeMounts:
+            - name: neo4j-data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 7474
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 7474
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+      volumes:
+        - name: neo4j-data
+          persistentVolumeClaim:
+            claimName: neo4j-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-data
+  namespace: banking-system
+  labels:
+    app: neo4j
+    app.kubernetes.io/part-of: banking-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: banking-system
+  labels:
+    app: neo4j
+    app.kubernetes.io/part-of: banking-system
+spec:
+  type: ClusterIP
+  selector:
+    app: neo4j
+  ports:
+    - port: 7474
+      targetPort: 7474
+      name: http
+    - port: 7687
+      targetPort: 7687
+      name: bolt

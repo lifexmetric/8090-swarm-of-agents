@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: banking-ingress
+  namespace: banking-system
+  labels:
+    app.kubernetes.io/part-of: banking-system
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: 1m
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: banking.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 3000
+  tls:
+    - hosts:
+        - banking.example.com
+      secretName: banking-tls
+---
+# Service for api-gateway (ClusterIP, referenced by Ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: banking-system
+  labels:
+    app: api-gateway
+    app.kubernetes.io/part-of: banking-system
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http

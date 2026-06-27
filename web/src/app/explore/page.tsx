@@ -4,16 +4,26 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus, MessageSquare,
+  ArrowLeft,
+  Search,
+  Maximize2,
+  FileDown,
+  X,
+  ShieldAlert,
+  Plus,
+  Minus,
+  MessageSquare,
+  GitMerge,
 } from "lucide-react";
 import {
+  GRAPH,
   NODE_KIND_META,
   EDGE_KIND_META,
   CONFIDENCE_META,
   NODE_GROUPS,
-  nodeByIdIn,
-  dependenciesOfIn,
-  dependentsOfIn,
+  nodeById,
+  dependenciesOf,
+  dependentsOf,
   type GraphData,
   type GraphNode,
   type NodeKind,
@@ -24,16 +34,23 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
 import { Logo, GithubMark, cn } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NODE_ICON } from "@/components/icons";
 
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
 const EMPTY_GRAPH: GraphData = { nodes: [], links: [] };
 
-const EMPTY_SET = new Set<string>();
+const CRITICAL_PATH_NODE_IDS = new Set([
+  "api-gateway",
+  "orders-module",
+  "rabbitmq",
+  "payments-service",
+  "rbc-rail-adapter",
+]);
 
 export default function ExplorePage() {
   return (
-    <React.Suspense fallback={<main className="h-screen w-screen bg-[#0c0d10]" />}>
+    <React.Suspense fallback={<main className="h-screen w-screen bg-bg" />}>
       <ExplorePageContent />
     </React.Suspense>
   );
@@ -52,6 +69,7 @@ function ExplorePageContent() {
   const [query, setQuery] = React.useState("");
   const [activeKinds, setActiveKinds] = React.useState<Set<NodeKind>>(new Set(ALL_KINDS));
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
+  const [criticalPathMode, setCriticalPathMode] = React.useState(false);
   const [graphLoad, setGraphLoad] = React.useState<{
     key: string;
     graph: GraphData | null;
@@ -59,7 +77,6 @@ function ExplorePageContent() {
     apiNotice: string | null;
   } | null>(null);
 
-  // Navigation history for drill-down exploration
   const [nodeHistory, setNodeHistory] = React.useState<GraphNode[]>([]);
   const [panelView, setPanelView] = React.useState<"overview" | "subgraph">("overview");
 
@@ -68,8 +85,8 @@ function ExplorePageContent() {
     const key = isSystemDetail && scanId
       ? `detail:${scanId}`
       : scanId
-      ? `scan:${scanId}`
-      : `workspace:${ATLAS_WORKSPACE_ID}`;
+        ? `scan:${scanId}`
+        : `workspace:${ATLAS_WORKSPACE_ID}`;
 
     async function load() {
       try {
@@ -106,23 +123,26 @@ function ExplorePageContent() {
         const repoCount = workspaceGraph.repositories.length;
         setGraphLoad({
           key,
-          graph: workspaceGraph,
+          graph: workspaceGraph.nodes.length > 0 ? workspaceGraph : GRAPH,
           repoLabel: repoCount === 1
             ? workspaceGraph.repositories[0].url.replace(/^https:\/\/github\.com\//, "")
-            : `${repoCount} repos · workspace:${workspaceGraph.workspaceId}`,
-          apiNotice: null,
+            : repoCount > 1
+              ? `${repoCount} repos · workspace:${workspaceGraph.workspaceId}`
+              : "demo · acme/payments-platform",
+          apiNotice: workspaceGraph.nodes.length > 0 ? null : "No workspace scans yet. Showing the demo graph.",
         });
       } catch (err) {
         if (!cancelled) {
           setGraphLoad({
             key,
-            graph: null,
-            repoLabel: scanId ?? `workspace:${ATLAS_WORKSPACE_ID}`,
-            apiNotice: err instanceof Error ? err.message : "Unable to load real backend graph",
+            graph: GRAPH,
+            repoLabel: scanId ?? "demo · acme/payments-platform",
+            apiNotice: err instanceof Error ? `Demo fallback · ${err.message}` : "Demo fallback · unable to load backend graph",
           });
         }
       }
     }
+
     void load();
     return () => {
       cancelled = true;
@@ -132,54 +152,64 @@ function ExplorePageContent() {
   const graphKey = isSystemDetail && scanId
     ? `detail:${scanId}`
     : scanId
-    ? `scan:${scanId}`
-    : `workspace:${ATLAS_WORKSPACE_ID}`;
+      ? `scan:${scanId}`
+      : `workspace:${ATLAS_WORKSPACE_ID}`;
   const activeGraphLoad = graphLoad?.key === graphKey ? graphLoad : null;
   const graph = activeGraphLoad?.graph ?? EMPTY_GRAPH;
   const repoLabel = activeGraphLoad?.repoLabel ?? `workspace:${ATLAS_WORKSPACE_ID}`;
   const displayRepoLabel = isSystemDetail ? repoLabel.replace(/ · detail$/, "") : repoLabel;
   const isGraphLoading = !activeGraphLoad;
-  const apiNotice = activeGraphLoad?.apiNotice ?? (isGraphLoading ? "Loading real graph…" : null);
-  const graphUnavailable = Boolean(activeGraphLoad && activeGraphLoad.apiNotice && !activeGraphLoad.graph);
+  const apiNotice = activeGraphLoad?.apiNotice ?? (isGraphLoading ? "Loading graph..." : null);
   const graphEmpty = Boolean(activeGraphLoad && !activeGraphLoad.apiNotice && graph.nodes.length === 0);
-  const nodeByIdForGraph = React.useCallback(
-    (id: string) => nodeByIdIn(graph, id),
-    [graph],
-  );
-  const dependenciesForGraph = React.useCallback(
-    (id: string) => dependenciesOfIn(graph, id),
-    [graph],
-  );
-  const dependentsForGraph = React.useCallback(
-    (id: string) => dependentsOfIn(graph, id),
-    [graph],
+
+  const criticalPathNodeIds = React.useMemo(() => {
+    const demoNodesPresent = [...CRITICAL_PATH_NODE_IDS].every((id) =>
+      graph.nodes.some((node) => node.id === id),
+    );
+    if (demoNodesPresent) return CRITICAL_PATH_NODE_IDS;
+    return new Set(
+      graph.links
+        .filter((link) => link.criticality >= 5)
+        .flatMap((link) => [link.source, link.target]),
+    );
+  }, [graph]);
+
+  const criticalPathLinkIds = React.useMemo(
+    () =>
+      new Set(
+        graph.links
+          .filter((link) => criticalPathNodeIds.has(link.source) && criticalPathNodeIds.has(link.target))
+          .map((link) => link.id),
+      ),
+    [criticalPathNodeIds, graph.links],
   );
 
-  // Select from main graph and reset drill history.
   const selectNode = React.useCallback((id: string) => {
     setNodeHistory([]);
     setPanelView("overview");
-    if (!id) { setSelectedNodeId(null); setSelectedLinkId(null); return; }
+    setCriticalPathMode(false);
+    if (!id) {
+      setSelectedNodeId(null);
+      setSelectedLinkId(null);
+      return;
+    }
     setSelectedLinkId(null);
     setSelectedNodeId(id);
   }, []);
 
-  // Drill down from sub-graph — adds current node to breadcrumb history
   const drillDown = React.useCallback((id: string) => {
     setSelectedNodeId((current) => {
       if (current) {
-        const currentNode = nodeByIdForGraph(current);
-        if (currentNode) {
-          setNodeHistory((h) => [...h, currentNode]);
-        }
+        const currentNode = nodeById(current, graph);
+        if (currentNode) setNodeHistory((h) => [...h, currentNode]);
       }
       return id;
     });
     setPanelView("subgraph");
     setSelectedLinkId(null);
-  }, [nodeByIdForGraph]);
+    setCriticalPathMode(false);
+  }, [graph]);
 
-  // Go back one level in drill history
   const goBack = React.useCallback(() => {
     setNodeHistory((h) => {
       if (h.length === 0) return h;
@@ -190,25 +220,27 @@ function ExplorePageContent() {
     });
   }, []);
 
-  // Double-click a system node to enter its scan-level graph; inside a system it opens the local sub-graph.
   const handleDoubleClickNode = React.useCallback((id: string) => {
-    const node = nodeByIdForGraph(id);
+    const node = nodeById(id, graph);
     if (!isSystemDetail && node?.scanId) {
       setNodeHistory([]);
       setSelectedLinkId(null);
       setSelectedNodeId(null);
+      setCriticalPathMode(false);
       router.push(`/explore?scanId=${encodeURIComponent(node.scanId)}&view=detail`);
       return;
     }
 
     setNodeHistory([]);
+    setCriticalPathMode(false);
     setSelectedLinkId(null);
     setSelectedNodeId(id);
     setPanelView("subgraph");
     graphRef.current?.focusNode(id);
-  }, [isSystemDetail, nodeByIdForGraph, router]);
+  }, [graph, isSystemDetail, router]);
 
   const selectLink = React.useCallback((id: string) => {
+    setCriticalPathMode(false);
     setSelectedNodeId(null);
     setSelectedLinkId(id);
   }, []);
@@ -216,18 +248,13 @@ function ExplorePageContent() {
   const toggleKind = (k: NodeKind) =>
     setActiveKinds((prev) => {
       const next = new Set(prev);
-      if (next.has(k)) {
-        next.delete(k);
-      } else {
-        next.add(k);
-      }
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
       return next;
     });
 
-  // ── Keyboard navigation ──────────────────────────────────────────────────
   React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // Don't intercept when typing in an input
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -242,7 +269,7 @@ function ExplorePageContent() {
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const deps = dependenciesForGraph(selectedNodeId);
+        const deps = dependenciesOf(selectedNodeId, graph);
         if (deps.length > 0) {
           const next = deps[0].target;
           setSelectedNodeId(next);
@@ -255,7 +282,7 @@ function ExplorePageContent() {
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const parents = dependentsForGraph(selectedNodeId);
+        const parents = dependentsOf(selectedNodeId, graph);
         if (parents.length > 0) {
           const prev = parents[0].source;
           setSelectedNodeId(prev);
@@ -269,7 +296,7 @@ function ExplorePageContent() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dependenciesForGraph, dependentsForGraph, selectedNodeId, selectNode]);
+  }, [graph, selectedNodeId, selectNode]);
 
   const filtered: GraphData = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -286,37 +313,18 @@ function ExplorePageContent() {
     });
     const ids = new Set(nodes.map((n) => n.id));
     return { nodes, links: graph.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
-  }, [query, activeKinds, highRiskOnly, graph]);
+  }, [graph, query, activeKinds, highRiskOnly]);
 
   const selectedNode = selectedNodeId ? graph.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
   const selectedLink = selectedLinkId ? graph.links.find((l) => l.id === selectedLinkId) ?? null : null;
   const panelOpen = Boolean(selectedNode || selectedLink);
   const highRiskCount = graph.nodes.filter((n) => n.risks.length > 0).length;
+  const exportHref = scanId
+    ? `/export?scanId=${encodeURIComponent(scanId)}&repo=${encodeURIComponent(displayRepoLabel)}`
+    : "/export";
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#0c0d10]">
-      {(isGraphLoading || graphUnavailable || graphEmpty) && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#0c0d10] px-6">
-          <div className="max-w-md rounded-lg border border-[#2a2c36] bg-[#181a22] p-5">
-            <p className="mb-2 text-sm font-semibold text-[#e8e9ed]">
-              {isGraphLoading
-                ? "Loading real graph"
-                : graphEmpty
-                ? "No real scan data yet"
-                : scanId
-                ? "Real scan unavailable"
-                : "Real workspace unavailable"}
-            </p>
-            <p className="text-[13px] leading-relaxed text-[#8b8d98]">
-              {graphEmpty ? "Run a repository scan to populate the workspace graph." : apiNotice}
-            </p>
-            <Link href="/" className="mt-4 inline-flex rounded-lg bg-[#818cf8] px-3 py-1.5 text-[13px] font-semibold text-white">
-              {graphEmpty ? "Start a scan" : "Start another scan"}
-            </Link>
-          </div>
-        </div>
-      )}
-      {/* Graph canvas */}
+    <main className="relative h-screen w-screen overflow-hidden bg-bg">
       <div className="absolute inset-0">
         <Graph3D
           ref={graphRef}
@@ -326,35 +334,53 @@ function ExplorePageContent() {
           onSelectNode={selectNode}
           onSelectLink={selectLink}
           onDoubleClickNode={handleDoubleClickNode}
-          criticalPathMode={false}
-          criticalPathNodeIds={EMPTY_SET}
-          criticalPathLinkIds={EMPTY_SET}
+          criticalPathMode={criticalPathMode}
+          criticalPathNodeIds={criticalPathNodeIds}
+          criticalPathLinkIds={criticalPathLinkIds}
         />
       </div>
 
-      {/* ── Top toolbar ── */}
+      {(isGraphLoading || apiNotice) && !graphEmpty && (
+        <div className="pointer-events-none absolute left-1/2 top-24 z-30 -translate-x-1/2 px-4">
+          <div className="rounded-lg border border-line bg-bg/90 px-4 py-2.5 font-mono text-[12px] text-faint backdrop-blur-sm">
+            {apiNotice}
+          </div>
+        </div>
+      )}
+
+      {graphEmpty && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-bg px-6">
+          <div className="max-w-md rounded-lg border border-line bg-surface p-5">
+            <p className="mb-2 text-sm font-semibold text-ink">No real scan data yet</p>
+            <p className="text-[13px] leading-relaxed text-muted">Run a repository scan to populate the workspace graph.</p>
+            <Link href="/" className="mt-4 inline-flex rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white">
+              Start a scan
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
-        {/* Primary bar */}
-        <div className="pointer-events-auto border-b border-[#2a2c36] bg-[#0c0d10]/90 backdrop-blur-sm">
+        <div className="pointer-events-auto border-b border-line bg-bg/90 backdrop-blur-sm">
           <div className="mx-auto flex min-h-11 max-w-[1600px] flex-wrap items-center gap-2 px-3 py-2 sm:h-11 sm:flex-nowrap sm:gap-3 sm:px-4 sm:py-0">
             <div className="shrink-0">
               <Logo />
             </div>
-            <div className="h-4 w-px bg-[#2a2c36]" />
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-[#5c5e6a]">
+            <div className="h-4 w-px bg-line" />
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-faint">
               {isSystemDetail ? (
                 <>
                   <Link
                     href="/explore"
-                    className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#2a2c36] px-2 py-1 font-mono text-[12px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+                    className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 py-1 font-mono text-[12px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
                   >
                     <ArrowLeft className="h-3 w-3" />
                     Workspace
                   </Link>
-                  <span className="shrink-0 font-mono text-[12px] text-[#3a3c48]">/</span>
+                  <span className="shrink-0 font-mono text-[12px] text-line-2">/</span>
                   <GithubMark className="h-3.5 w-3.5 shrink-0" />
                   <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
-                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                  <span className="hidden rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-faint md:inline">
                     Inside system
                   </span>
                 </>
@@ -362,93 +388,81 @@ function ExplorePageContent() {
                 <>
                   <GithubMark className="h-3.5 w-3.5 shrink-0" />
                   <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
-                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                  <span className="hidden rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-faint md:inline">
                     System map
                   </span>
                 </>
               )}
             </div>
             <div className="flex w-full min-w-0 items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end sm:gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border border-[#2a2c36] bg-[#181a22] sm:flex-none">
-                <Search className="ml-2.5 h-3.5 w-3.5 shrink-0 text-[#5c5e6a]" />
+              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border border-line bg-surface sm:flex-none">
+                <Search className="ml-2.5 h-3.5 w-3.5 shrink-0 text-faint" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search nodes…"
-                  className="w-full min-w-0 bg-transparent py-1.5 pr-2 text-[13px] text-[#e8e9ed] placeholder:text-[#5c5e6a] focus:outline-none sm:w-48"
+                  placeholder="Search nodes..."
+                  className="w-full min-w-0 bg-transparent py-1.5 pr-2 text-[13px] text-ink placeholder:text-faint focus:outline-none sm:w-48"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-[#5c5e6a] hover:text-[#8b8d98]">
+                  <button onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-faint hover:text-muted">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
-              <div className="hidden rounded-lg border border-[#2a2c36] bg-[#181a22] sm:flex">
+              <div className="hidden rounded-lg border border-line bg-surface sm:flex">
                 <button
                   onClick={() => graphRef.current?.zoomOut()}
                   aria-label="Zoom out"
-                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-[#2a2c36] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Minus className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => graphRef.current?.zoomIn()}
                   aria-label="Zoom in"
-                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-[#2a2c36] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => { selectNode(""); graphRef.current?.resetView(); }}
                   aria-label="Reset zoom"
-                  className="flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[13px] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[13px] text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Maximize2 className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Reset</span>
                 </button>
               </div>
-              {scanId ? (
-                <Link
-                  href={`/export?scanId=${encodeURIComponent(scanId)}`}
-                  aria-label="Export context"
-                  title="Export context"
-                  className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
-                >
-                  <FileDown className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Export context</span>
-                </Link>
-              ) : (
-                <Link
-                  href="/"
-                  aria-label="Scan to export"
-                  title="Scan to export"
-                  className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
-                >
-                  <FileDown className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Scan to export</span>
-                </Link>
-              )}
+              <Link
+                href={exportHref}
+                aria-label="Export context"
+                title="Export context"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-[13px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Export context</span>
+              </Link>
               <button
                 type="button"
                 aria-label="Open handoff assistant"
                 title="Open handoff assistant"
                 onClick={() => setChatOpen((value) => !value)}
                 className={cn(
-                  "flex cursor-pointer items-center gap-1.5 border px-2.5 py-1.5 text-[13px] font-semibold transition-colors duration-150",
+                  "flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold transition-colors duration-150",
                   chatOpen
-                    ? "border-[#3b82f6]/40 bg-[#3b82f6]/10 text-[#3b82f6]"
-                    : "border-[#2a2a2a] bg-[#111] text-[#888] hover:text-[#ededed]",
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-line bg-surface text-muted hover:text-ink",
                 )}
               >
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Handoff</span>
               </button>
+              <ThemeToggle />
             </div>
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="pointer-events-auto border-b border-[#2a2c36] bg-[#0c0d10]/80 backdrop-blur-sm">
+        <div className="pointer-events-auto border-b border-line bg-bg/80 backdrop-blur-sm">
           <div className="mx-auto flex h-9 max-w-[1600px] items-center gap-1.5 overflow-x-auto px-4">
             {ALL_KINDS.map((k) => {
               const meta = NODE_KIND_META[k];
@@ -461,111 +475,108 @@ function ExplorePageContent() {
                   className={cn(
                     "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
                     on
-                      ? "border-transparent text-[#181a22]"
-                      : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
+                      ? "border-transparent"
+                      : "border-line text-faint hover:text-muted",
                   )}
-                  style={on ? { backgroundColor: meta.color, color: meta.color === "#e8e9ed" ? "#0c0d10" : "#fff" } : undefined}
+                  style={on ? { backgroundColor: meta.color, color: meta.group === "Internal" ? "var(--color-bg)" : "#fff" } : undefined}
                 >
                   <Icon className="h-3 w-3" />
                   {meta.label}
                 </button>
               );
             })}
-            <div className="h-4 w-px shrink-0 bg-[#2a2c36]" />
+            <div className="h-4 w-px shrink-0 bg-line" />
             <button
               onClick={() => setHighRiskOnly((v) => !v)}
               className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
                 highRiskOnly
-                  ? "border-[#fbbf24]/40 bg-[#fbbf24]/10 text-[#fbbf24]"
-                  : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
+                  ? "border-warn/40 bg-warn/10 text-warn"
+                  : "border-line text-faint hover:text-muted",
               )}
             >
               <ShieldAlert className="h-3 w-3" />
               High-risk · {highRiskCount}
             </button>
+            <button
+              onClick={() => {
+                setCriticalPathMode((v) => !v);
+                setSelectedNodeId(null);
+                setSelectedLinkId(null);
+              }}
+              className={cn(
+                "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
+                criticalPathMode
+                  ? "border-err/40 bg-err/10 text-err"
+                  : "border-line text-faint hover:text-muted",
+              )}
+              title="Highlight the critical path through the system"
+            >
+              <GitMerge className="h-3 w-3" />
+              Critical path
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ── Compact side legend ── */}
       <div className="pointer-events-none absolute left-3 top-28 z-20 hidden sm:block">
-        <div className="pointer-events-auto w-44 rounded-lg border border-[#2a2c36] bg-[#0c0d10]/90 p-2.5 backdrop-blur-sm">
-          <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Groups</p>
+        <div className="pointer-events-auto w-44 rounded-lg border border-line bg-bg/90 p-2.5 backdrop-blur-sm">
+          <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Groups</p>
           <div className="space-y-1.5">
             {NODE_GROUPS.map((g) => (
               <div key={g.key} className="group relative flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                 <span className="text-[11px] font-medium" style={{ color: g.color }}>{g.key}</span>
-                <span className="ml-auto font-mono text-[10px] text-[#5c5e6a]">
+                <span className="ml-auto font-mono text-[10px] text-faint">
                   {g.key === "Internal" ? "code" : g.key === "Infrastructure" ? "data" : "apis"}
                 </span>
-                <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden w-56 -translate-y-1/2 rounded-lg border border-[#2a2c36] bg-[#12131a] p-2 text-[11px] leading-relaxed text-[#8b8d98] group-hover:block">
+                <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden w-56 -translate-y-1/2 rounded-lg border border-line bg-bg-2 p-2 text-[11px] leading-relaxed text-muted group-hover:block">
                   {g.desc}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="mt-2.5 border-t border-[#2a2c36] pt-2">
-            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Edges</p>
+          <div className="mt-2.5 border-t border-line pt-2">
+            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Edges</p>
             <div className="space-y-1">
               {(Object.keys(EDGE_KIND_META) as Array<keyof typeof EDGE_KIND_META>).map((k) => (
                 <div key={k} className="flex items-center gap-2">
                   <span className="h-px w-3 shrink-0" style={{ backgroundColor: EDGE_KIND_META[k].color }} />
-                  <span className="truncate text-[10px] text-[#8b8d98]">{EDGE_KIND_META[k].label}</span>
+                  <span className="truncate text-[10px] text-muted">{EDGE_KIND_META[k].label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#2a2c36] pt-2">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line pt-2">
             {(Object.keys(CONFIDENCE_META) as Array<keyof typeof CONFIDENCE_META>).map((k) => (
-              <div key={k} className="flex items-center gap-1 text-[10px] text-[#8b8d98]">
+              <div key={k} className="flex items-center gap-1 text-[10px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONFIDENCE_META[k].color }} />
                 {CONFIDENCE_META[k].label}
               </div>
             ))}
           </div>
-
-          {/* Keyboard shortcuts */}
-          <div className="mt-2.5 border-t border-[#2a2c36] pt-2">
-            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Keys</p>
-            <div className="space-y-1">
-              {[
-                { key: "↑ / ↓", label: "Traverse" },
-                { key: "Dbl-click", label: isSystemDetail ? "Sub-graph" : "Enter" },
-                { key: "Esc", label: "Deselect" },
-              ].map((s) => (
-                <div key={s.key} className="flex items-center justify-between gap-2">
-                  <span className="rounded bg-[#1e2028] px-1 font-mono text-[9px] text-[#5c5e6a]">{s.key}</span>
-                  <span className="text-[10px] text-[#5c5e6a]">{s.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* ── Bottom-center hint ── */}
       {!panelOpen && (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 w-[calc(100vw-24px)] max-w-xl -translate-x-1/2">
-          <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/80 px-3.5 py-2 text-center font-mono text-[12px] text-[#5c5e6a] backdrop-blur-sm">
-              {apiNotice ?? (selectedNodeId
-              ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
-              : isSystemDetail
-              ? "Inside system · click Workspace to go back up · double-click a node for sub-graph"
-              : "System map · double-click a system to enter · drag to pan · scroll to zoom")}
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+          <div className="rounded-lg border border-line bg-bg/80 px-3.5 py-2 font-mono text-[12px] text-faint backdrop-blur-sm">
+            {criticalPathMode
+              ? "Critical path highlighted · click any node to explore · Esc to clear"
+              : selectedNodeId
+                ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
+                : "Top-down flow · drag to pan · scroll to zoom · click any node"}
           </div>
         </div>
       )}
 
-      {/* ── Stats ── */}
       <div className={cn(
-        "pointer-events-none absolute right-3 top-28 z-10 hidden transition-opacity duration-200 sm:block",
+        "pointer-events-none absolute right-3 top-28 z-10 transition-opacity duration-200",
         panelOpen && "opacity-0",
       )}>
-        <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/90 p-3 backdrop-blur-sm">
+        <div className="rounded-lg border border-line bg-bg/90 p-3 backdrop-blur-sm">
           <div className="flex gap-5">
             {[
               { label: "Nodes", value: filtered.nodes.length },
@@ -573,25 +584,26 @@ function ExplorePageContent() {
               { label: "External", value: filtered.nodes.filter((n) => n.kind === "external").length },
             ].map((s) => (
               <div key={s.label}>
-                <p className="font-mono text-xl font-semibold tabular-nums text-[#e8e9ed]">{s.value}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a]">{s.label}</p>
+                <p className="font-mono text-xl font-semibold tabular-nums text-ink">{s.value}</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-faint">{s.label}</p>
               </div>
             ))}
           </div>
+          {criticalPathMode && (
+            <p className="mt-2 font-mono text-[10px] text-err">
+              Critical path active
+            </p>
+          )}
         </div>
       </div>
 
-      {/* ── Right detail panel ── */}
       {panelOpen && (
-        <div
-          data-testid="detail-panel"
-          className="absolute inset-x-2 bottom-2 top-auto z-30 h-[45dvh] border border-[#2a2c36] sm:inset-x-auto sm:right-0 sm:top-20 sm:h-[calc(100%-5rem)] sm:w-full sm:max-w-[400px] sm:border-y-0 sm:border-r-0 sm:border-l"
-        >
-          <div className="h-full overflow-hidden rounded-xl bg-[#181a22] animate-slide-right sm:rounded-l-xl sm:rounded-r-none">
+        <div className="absolute right-0 top-0 z-30 h-full w-full max-w-[400px] border-l border-line">
+          <div className="h-full overflow-hidden rounded-l-xl bg-surface animate-slide-right">
             {selectedNode && (
               <NodePanel
                 node={selectedNode}
-                graph={graph}
+                graphData={graph}
                 onClose={() => selectNode("")}
                 onFocus={() => graphRef.current?.focusNode(selectedNode.id)}
                 onSelectLink={selectLink}
@@ -605,7 +617,7 @@ function ExplorePageContent() {
             {selectedLink && (
               <LinkPanel
                 link={selectedLink}
-                graph={graph}
+                graphData={graph}
                 onClose={() => selectNode("")}
                 onSelectNode={selectNode}
               />
@@ -621,10 +633,7 @@ function ExplorePageContent() {
         selectedLink={selectedLink}
         detailsOpen={panelOpen}
         onClose={() => setChatOpen(false)}
-        onSelectNode={(id) => {
-          selectNode(id);
-          graphRef.current?.focusNode(id);
-        }}
+        onSelectNode={selectNode}
         onSelectLink={selectLink}
       />
     </main>

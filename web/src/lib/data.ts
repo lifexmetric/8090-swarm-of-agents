@@ -86,41 +86,41 @@ export const NODE_KIND_META: Record<
   NodeKind,
   { label: string; color: string; group: string }
 > = {
-  service:  { label: "Service / Module",     color: "#e8e9ed", group: "Internal"       },
-  auth:     { label: "Auth / Identity",      color: "#e8e9ed", group: "Internal"       },
-  database: { label: "Data Store",           color: "#60a5fa", group: "Infrastructure" },
-  queue:    { label: "Queue / Stream",       color: "#60a5fa", group: "Infrastructure" },
-  external: { label: "External Dependency",  color: "#fb923c", group: "External"       },
-  config:   { label: "Config / Env",         color: "#5c5e6a", group: "Config"         },
+  service:  { label: "Service / Module",     color: "var(--color-node-service)", group: "Internal"       },
+  auth:     { label: "Auth / Identity",      color: "var(--color-node-service)", group: "Internal"       },
+  database: { label: "Data Store",           color: "var(--color-node-infra)",   group: "Infrastructure" },
+  queue:    { label: "Queue / Stream",       color: "var(--color-node-infra)",   group: "Infrastructure" },
+  external: { label: "External Dependency",  color: "var(--color-node-external)", group: "External"       },
+  config:   { label: "Config / Env",         color: "var(--color-node-neutral)", group: "Config"         },
 };
 
 export const EDGE_KIND_META: Record<
   EdgeKind,
   { label: string; color: string; dashed: boolean }
 > = {
-  sync:    { label: "Sync API call",       color: "#8b8d98", dashed: false },
-  async:   { label: "Async / queue",       color: "#60a5fa", dashed: true  },
-  db:      { label: "DB read/write",       color: "#60a5fa", dashed: false },
-  package: { label: "Package dependency",  color: "#34d399", dashed: false },
-  config:  { label: "Shared config",       color: "#5c5e6a", dashed: true  },
-  auth:    { label: "Auth delegation",     color: "#8b8d98", dashed: false },
-  webhook: { label: "Webhook / callback",  color: "#fb923c", dashed: true  },
+  sync:    { label: "Sync API call",       color: "var(--color-muted)",        dashed: false },
+  async:   { label: "Async / queue",       color: "var(--color-node-infra)",   dashed: true  },
+  db:      { label: "DB read/write",       color: "var(--color-node-infra)",   dashed: false },
+  package: { label: "Package dependency",  color: "var(--color-muted)",        dashed: true  },
+  config:  { label: "Shared config",       color: "var(--color-node-neutral)", dashed: true  },
+  auth:    { label: "Auth delegation",     color: "var(--color-muted)",        dashed: false },
+  webhook: { label: "Webhook / callback",  color: "var(--color-node-external)", dashed: true  },
 };
 
 export const CONFIDENCE_META: Record<
   Confidence,
   { label: string; color: string }
 > = {
-  confirmed: { label: "Confirmed", color: "#34d399" },
-  inferred:  { label: "Inferred",  color: "#fbbf24" },
-  uncertain: { label: "Uncertain", color: "#f87171" },
+  confirmed: { label: "Confirmed", color: "var(--color-ok)" },
+  inferred:  { label: "Inferred",  color: "var(--color-warn)" },
+  uncertain: { label: "Uncertain", color: "var(--color-err)" },
 };
 
 // The 3 meaningful node groups shown in the legend
 export const NODE_GROUPS = [
-  { key: "Internal",       color: "#e8e9ed", desc: "Services and auth running inside your codebase" },
-  { key: "Infrastructure", color: "#60a5fa", desc: "Databases, queues, and message streams" },
-  { key: "External",       color: "#fb923c", desc: "Third-party APIs and bank rails outside your control" },
+  { key: "Internal",       color: "var(--color-node-service)",  desc: "Services and auth running inside your codebase" },
+  { key: "Infrastructure", color: "var(--color-node-infra)",    desc: "Databases, queues, and message streams" },
+  { key: "External",       color: "var(--color-node-external)", desc: "Third-party APIs and bank rails outside your control" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -674,42 +674,42 @@ export const GRAPH: GraphData = { nodes: NODES, links: LINKS };
 // Derived helpers
 // ---------------------------------------------------------------------------
 
-export function nodeById(id: string): GraphNode | undefined {
-  return NODES.find((n) => n.id === id);
-}
-
-export function nodeByIdIn(graph: GraphData, id: string): GraphNode | undefined {
+export function nodeById(id: string, graph: GraphData = GRAPH): GraphNode | undefined {
   return graph.nodes.find((n) => n.id === id);
 }
 
-export function linkEndpoints(link: GraphLink): {
+export function nodeByIdIn(graph: GraphData, id: string): GraphNode | undefined {
+  return nodeById(id, graph);
+}
+
+export function linkEndpoints(link: GraphLink, graph: GraphData = GRAPH): {
   source: GraphNode | undefined;
   target: GraphNode | undefined;
 } {
-  return { source: nodeById(link.source), target: nodeById(link.target) };
+  return { source: nodeById(link.source, graph), target: nodeById(link.target, graph) };
 }
 
 export function linkEndpointsIn(graph: GraphData, link: GraphLink): {
   source: GraphNode | undefined;
   target: GraphNode | undefined;
 } {
-  return { source: nodeByIdIn(graph, link.source), target: nodeByIdIn(graph, link.target) };
+  return linkEndpoints(link, graph);
 }
 
-export function dependenciesOf(nodeId: string): GraphLink[] {
-  return LINKS.filter((l) => l.source === nodeId);
-}
-
-export function dependenciesOfIn(graph: GraphData, nodeId: string): GraphLink[] {
+export function dependenciesOf(nodeId: string, graph: GraphData = GRAPH): GraphLink[] {
   return graph.links.filter((l) => l.source === nodeId);
 }
 
-export function dependentsOf(nodeId: string): GraphLink[] {
-  return LINKS.filter((l) => l.target === nodeId);
+export function dependenciesOfIn(graph: GraphData, nodeId: string): GraphLink[] {
+  return dependenciesOf(nodeId, graph);
+}
+
+export function dependentsOf(nodeId: string, graph: GraphData = GRAPH): GraphLink[] {
+  return graph.links.filter((l) => l.target === nodeId);
 }
 
 export function dependentsOfIn(graph: GraphData, nodeId: string): GraphLink[] {
-  return graph.links.filter((l) => l.target === nodeId);
+  return dependentsOf(nodeId, graph);
 }
 
 // ---------------------------------------------------------------------------

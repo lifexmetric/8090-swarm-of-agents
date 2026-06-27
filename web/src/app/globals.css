@@ -33,6 +33,15 @@
   --color-warn: #fbbf24;
   --color-err:  #f87171;
 
+  /* ── Code / graph / overlay ── */
+  --color-code:       #a5b4fc;
+  --color-code-bg:    #12131a;
+  --color-overlay:    rgba(12, 13, 16, 0.92);
+  --color-graph-dim:  #222222;
+  --color-graph-grid: rgba(129, 140, 248, 0.12);
+  --color-inverse:    #ededed;
+  --color-inverse-fg: #0c0d10;
+
   /* ── Fonts ── */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -56,6 +65,37 @@
 
 :root {
   color-scheme: dark;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-bg:        #f5f6f9;
+  --color-bg-2:      #edf0f5;
+  --color-surface:   #ffffff;
+  --color-surface-2: #f0f1f6;
+  --color-surface-3: #e8eaf0;
+  --color-ink:       #0c0d10;
+  --color-muted:     #565868;
+  --color-faint:     #9092a4;
+  --color-line:      #dcdee8;
+  --color-line-2:    #c4c6d4;
+  --color-accent:    #4f52d9;
+  --color-accent-2:  #0c0d10;
+  --color-ok:        #059669;
+  --color-warn:      #b45309;
+  --color-err:       #dc2626;
+  --color-node-service:  #1a1b20;
+  --color-node-infra:    #2563eb;
+  --color-node-external: #ea6c0a;
+  --color-node-neutral:  #6b6c78;
+  --color-code:          #4f52d9;
+  --color-code-bg:       #f0f1f6;
+  --color-overlay:       rgba(245, 246, 249, 0.92);
+  --color-graph-dim:     #c4c6d4;
+  --color-graph-grid:    rgba(79, 82, 217, 0.10);
+  --color-inverse:       #0c0d10;
+  --color-inverse-fg:    #ffffff;
+  color-scheme: light;
 }
 
 html,
@@ -123,6 +163,28 @@ body {
 }
 .animate-blink {
   animation: blink 1s step-end infinite;
+}
+
+/* ── Hero ambient gradient (landing page) ────────────────────────────────── */
+.hero-ambient {
+  background:
+    radial-gradient(ellipse 900px 560px at 92% -2%, rgba(129, 140, 248, 0.11), transparent 65%),
+    radial-gradient(ellipse 640px 420px at 4% 96%,  rgba(251, 146,  60, 0.05), transparent 65%),
+    var(--color-bg);
+}
+
+[data-theme="light"] .hero-ambient {
+  background:
+    radial-gradient(ellipse 900px 560px at 92% -2%, rgba(99, 102, 241, 0.08), transparent 65%),
+    radial-gradient(ellipse 640px 420px at 4% 96%,  rgba(251, 146,  60, 0.03), transparent 65%),
+    var(--color-bg);
+}
+
+/* ── Graph canvas dot grid ── */
+.graph-grid {
+  background-image: radial-gradient(circle at center, var(--color-graph-grid) 1px, transparent 1px);
+  background-size: 72px 72px;
+  opacity: 0.35;
 }
 
 @media (prefers-reduced-motion: reduce) {

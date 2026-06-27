@@ -6,30 +6,32 @@ import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ArrowLeft, FileText, Boxes, Share2, Copy, Check, Download, Package,
-  ShieldAlert, ChevronDown, ChevronRight, Code, AlertTriangle,
+  ArrowLeft,
+  FileText,
+  Boxes,
+  Share2,
+  Copy,
+  Check,
+  Download,
+  Package,
+  ShieldAlert,
+  Database,
 } from "lucide-react";
 import {
   GRAPH,
   SYSTEM_BRIEF,
-  EDGE_KIND_META,
-  NODE_KIND_META,
-  CONFIDENCE_META,
   linkContextMarkdown,
   linkEndpoints,
   nodeContextMarkdown,
   riskSurfaceMarkdown,
   dependenciesOf,
   dependentsOf,
-  nodeById,
   type GraphNode,
-  type GraphLink,
 } from "@/lib/data";
 import { getScanExport } from "@/lib/api";
 import { SubGraph } from "@/components/SubGraph";
-import { Logo, CodeBlock, cn } from "@/components/ui";
-
-// ── Context file model ───────────────────────────────────────────────────────
+import { Logo, cn } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface ContextFile {
   id: string;
@@ -39,7 +41,7 @@ interface ContextFile {
   nodeId?: string;
 }
 
-const FILES: ContextFile[] = [
+const DEMO_FILES: ContextFile[] = [
   {
     id: "system-brief",
     name: "system-brief.md",
@@ -52,425 +54,91 @@ const FILES: ContextFile[] = [
     group: "risk",
     content: riskSurfaceMarkdown(),
   },
-  ...GRAPH.nodes.map((n) => ({
-    id: `node-${n.id}`,
-    name: `node-context/${n.id}.md`,
+  ...GRAPH.nodes.map((node) => ({
+    id: `node-${node.id}`,
+    name: `node-context/${node.id}.md`,
     group: "node" as const,
-    content: nodeContextMarkdown(n),
-    nodeId: n.id,
+    content: nodeContextMarkdown(node),
+    nodeId: node.id,
   })),
-  ...GRAPH.links.map((l) => {
-    const { source, target } = linkEndpoints(l);
+  ...GRAPH.links.map((link) => {
+    const { source, target } = linkEndpoints(link);
     return {
-      id: `link-${l.id}`,
+      id: `link-${link.id}`,
       name: `link-context/${source?.id}__${target?.id}.md`,
       group: "link" as const,
-      content: linkContextMarkdown(l),
+      content: linkContextMarkdown(link),
     };
   }),
 ];
 
-// ── Markdown renderer ────────────────────────────────────────────────────────
-
 const mdComponents = {
-  h1: (p: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h1 className="mb-4 mt-1 text-lg font-semibold text-[#e8e9ed]" {...p} />
+  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1 className="mb-4 mt-1 text-lg font-semibold text-ink" {...props} />
   ),
-  h2: (p: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h2 className="mb-2 mt-6 font-mono text-[10px] uppercase tracking-[0.16em] text-[#5c5e6a]" {...p} />
+  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2 className="mb-2 mt-6 font-mono text-[10px] uppercase tracking-[0.16em] text-faint" {...props} />
   ),
-  h3: (p: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h3 className="mb-2 mt-5 font-mono text-[13px] font-semibold text-[#c5c7d0]" {...p} />
+  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3 className="mb-2 mt-5 font-mono text-[13px] font-semibold text-muted" {...props} />
   ),
-  p: (p: React.HTMLAttributes<HTMLParagraphElement>) => (
-    <p className="mb-3 text-[13px] leading-relaxed text-[#8b8d98]" {...p} />
+  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p className="mb-3 text-[13px] leading-relaxed text-muted" {...props} />
   ),
-  ul: (p: React.HTMLAttributes<HTMLUListElement>) => (
-    <ul className="mb-3 space-y-1.5 text-[13px] text-[#8b8d98]" {...p} />
+  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul className="mb-3 space-y-1.5 text-[13px] text-muted" {...props} />
   ),
-  li: (p: React.HTMLAttributes<HTMLLIElement>) => (
-    <li className="ml-4 list-disc marker:text-[#5c5e6a]" {...p} />
+  li: (props: React.HTMLAttributes<HTMLLIElement>) => (
+    <li className="ml-4 list-disc marker:text-faint" {...props} />
   ),
-  code: (p: React.HTMLAttributes<HTMLElement>) => (
-    <code className="rounded-sm bg-[#1e2028] px-1.5 py-0.5 font-mono text-[12px] text-[#60a5fa]" {...p} />
+  code: (props: React.HTMLAttributes<HTMLElement>) => (
+    <code className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[12px] text-node-infra" {...props} />
   ),
-  pre: (p: React.HTMLAttributes<HTMLPreElement>) => (
-    <pre className="scroll-thin mb-3 overflow-x-auto border border-[#2a2c36] bg-[#12131a] p-3 font-mono text-[12px] text-[#a5b4fc]" {...p} />
+  pre: (props: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre className="scroll-thin mb-3 overflow-x-auto border border-line bg-code-bg p-3 font-mono text-[12px] text-code" {...props} />
   ),
-  blockquote: (p: React.HTMLAttributes<HTMLElement>) => (
-    <blockquote
-      className="my-3 border-l-2 border-[#fbbf24]/60 bg-[#fbbf24]/5 py-2 pl-3 pr-2 text-[12.5px] text-[#fbbf24]/90"
-      {...p}
-    />
+  blockquote: (props: React.HTMLAttributes<HTMLElement>) => (
+    <blockquote className="my-3 border-l-2 border-warn/60 bg-warn/5 py-2 pl-3 pr-2 text-[12.5px] text-warn/90" {...props} />
   ),
-  hr: () => <hr className="my-4 border-[#2a2c36]" />,
+  hr: () => <hr className="my-4 border-line" />,
 };
 
-// ── Dependency deep-dive card ────────────────────────────────────────────────
-
-function CriticalityBar({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span
-          key={i}
-          className="h-2 w-2.5 rounded-sm"
-          style={{
-            backgroundColor:
-              i <= value
-                ? value >= 5
-                  ? "#f87171"
-                  : value >= 4
-                  ? "#fbbf24"
-                  : "#60a5fa"
-                : "#1e2028",
-          }}
-        />
-      ))}
-      <span className="ml-1 font-mono text-[10px] text-[#5c5e6a]">{value}/5</span>
-    </div>
-  );
+function groupForPath(path: string): ContextFile["group"] {
+  if (path === "system-brief.md") return "brief";
+  if (path.includes("risk")) return "risk";
+  if (path.startsWith("node-context/")) return "node";
+  if (path.startsWith("link-context/")) return "link";
+  return "metadata";
 }
-
-function DepCard({
-  link,
-  direction,
-  onJumpToNode,
-}: {
-  link: GraphLink;
-  direction: "out" | "in";
-  onJumpToNode: (id: string) => void;
-}) {
-  const isHigh = link.criticality >= 4;
-  const [open, setOpen] = React.useState(isHigh);
-  const peer =
-    direction === "out" ? nodeById(link.target) : nodeById(link.source);
-  const meta = EDGE_KIND_META[link.kind];
-  const peerMeta = peer ? NODE_KIND_META[peer.kind] : null;
-
-  return (
-    <div
-      className={cn(
-        "border transition-colors duration-150",
-        isHigh ? "border-[#fbbf24]/20 bg-[#fbbf24]/[0.03]" : "border-[#2a2a2a] bg-[#0a0a0a]",
-      )}
-    >
-      {/* Card header */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left"
-      >
-        <span
-          className="shrink-0 font-mono text-[12px]"
-          style={{ color: meta.color }}
-        >
-          {direction === "out" ? "→" : "←"}
-        </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (peer) {
-              onJumpToNode(peer.id);
-            }
-          }}
-          className="min-w-0 flex-1 cursor-pointer text-left hover:underline"
-        >
-          <span className="font-mono text-[12.5px] font-semibold text-[#e8e9ed]">
-            {peer?.label ?? (direction === "out" ? link.target : link.source)}
-          </span>
-          {peerMeta && (
-            <span
-              className="ml-2 font-mono text-[10px]"
-              style={{ color: peerMeta.color }}
-            >
-              {peerMeta.group}
-            </span>
-          )}
-        </button>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className="rounded border px-1.5 py-0.5 font-mono text-[10px]"
-            style={{ color: meta.color, borderColor: `${meta.color}44` }}
-          >
-            {meta.label}
-          </span>
-          <CriticalityBar value={link.criticality} />
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#5c5e6a]" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#5c5e6a]" />
-          )}
-        </div>
-      </button>
-
-      {/* Card body */}
-      {open && (
-        <div className="space-y-3 border-t border-[#2a2a2a] px-3 pt-3 pb-3">
-          {/* Summary */}
-          <p className="text-[12.5px] leading-relaxed text-[#8b8d98]">
-            {link.summary}
-          </p>
-
-          {/* Contract */}
-          <div>
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[#5c5e6a]">
-              Contract
-            </p>
-            <pre className="scroll-thin overflow-x-auto border border-[#2a2c36] bg-[#12131a] p-2.5 font-mono text-[11.5px] leading-relaxed text-[#a5b4fc]">
-              {link.contract}
-            </pre>
-          </div>
-
-          {/* Failure */}
-          <div className="flex items-start gap-2 rounded border border-[#f87171]/20 bg-[#f87171]/5 px-2.5 py-2">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#f87171]" />
-            <div>
-              <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[#f87171]/60">
-                Failure
-              </p>
-              <p className="text-[12px] leading-relaxed text-[#f87171]/80">
-                {link.failure}
-              </p>
-            </div>
-          </div>
-
-          {/* Before you change */}
-          {link.beforeYouChange && (
-            <div className="rounded border border-[#fbbf24]/30 bg-[#fbbf24]/5 px-2.5 py-2">
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#fbbf24]/70">
-                Before you change this
-              </p>
-              <p className="text-[12px] leading-relaxed text-[#fbbf24]/80">
-                {link.beforeYouChange}
-              </p>
-            </div>
-          )}
-
-          {/* Code snippet */}
-          {link.code && (
-            <div>
-              <div className="mb-1 flex items-center gap-1.5">
-                <Code className="h-3 w-3 text-[#5c5e6a]" />
-                <span className="font-mono text-[10px] text-[#5c5e6a]">
-                  {link.codePath}
-                </span>
-              </div>
-              <CodeBlock code={link.code} />
-            </div>
-          )}
-
-          {/* Risks */}
-          {link.risks.length > 0 && (
-            <ul className="space-y-1">
-              {link.risks.map((r) => (
-                <li key={r} className="flex items-start gap-2 text-[12px] text-[#8b8d98]">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#fbbf24]" />
-                  {r}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Confidence */}
-          <div className="flex items-center gap-2">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: CONFIDENCE_META[link.confidence].color }}
-            />
-            <span className="font-mono text-[10px] text-[#5c5e6a]">
-              {CONFIDENCE_META[link.confidence].label}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Node detail view ─────────────────────────────────────────────────────────
-
-function NodeDocView({
-  node,
-  onJumpToNode,
-}: {
-  node: GraphNode;
-  onJumpToNode: (id: string) => void;
-}) {
-  const meta = NODE_KIND_META[node.kind];
-  const deps = dependenciesOf(node.id);
-  const dependents = dependentsOf(node.id);
-
-  return (
-    <div>
-      {/* Header */}
-      <div className="mb-6 border-b border-[#2a2c36] pb-4">
-        <div className="flex items-center gap-3">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center border"
-            style={{
-              borderColor: `${meta.color}44`,
-              backgroundColor: `${meta.color}10`,
-            }}
-          >
-            <span className="font-mono text-[11px] font-bold" style={{ color: meta.color }}>
-              {node.label.slice(0, 2).toUpperCase()}
-            </span>
-          </span>
-          <div>
-            <h1 className="font-mono text-[16px] font-semibold text-[#e8e9ed]">
-              {node.label}
-            </h1>
-            <div className="mt-1 flex items-center gap-2">
-              <span
-                className="rounded border px-1.5 py-0.5 font-mono text-[10px]"
-                style={{ color: meta.color, borderColor: `${meta.color}44` }}
-              >
-                {meta.group}
-              </span>
-              <span className="font-mono text-[11px] text-[#5c5e6a]">
-                {node.domain}
-              </span>
-              <span
-                className="flex items-center gap-1 font-mono text-[10px]"
-                style={{ color: CONFIDENCE_META[node.confidence].color }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: CONFIDENCE_META[node.confidence].color }}
-                />
-                {CONFIDENCE_META[node.confidence].label}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sub-graph */}
-      <div className="mb-6">
-        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-          Connections — click any node to jump to it
-        </p>
-        <div className="rounded border border-[#2a2c36] bg-[#0a0a0a] py-2">
-          <SubGraph node={node} onSelectNode={onJumpToNode} />
-        </div>
-      </div>
-
-      {/* What it is / Why it exists */}
-      <div className="mb-4">
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-          What it is
-        </p>
-        <p className="text-[13px] leading-relaxed text-[#8b8d98]">{node.whatItIs}</p>
-      </div>
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-          Why it exists
-        </p>
-        <p className="text-[13px] leading-relaxed text-[#8b8d98]">{node.whyItExists}</p>
-      </div>
-
-      {/* Owns */}
-      {node.owns.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-            Owns
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {node.owns.map((o) => (
-              <span
-                key={o}
-                className="border border-[#2a2a2a] bg-[#0a0a0a] px-2 py-0.5 font-mono text-[11px] text-[#888]"
-              >
-                {o}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dependencies — deep-dive cards */}
-      {deps.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-            Depends on · {deps.length} outbound
-          </p>
-          <div className="space-y-2">
-            {deps
-              .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard
-                  key={l.id}
-                  link={l}
-                  direction="out"
-                  onJumpToNode={onJumpToNode}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dependents */}
-      {dependents.length > 0 && (
-        <div className="mb-6">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-            Depended on by · {dependents.length} inbound
-          </p>
-          <div className="space-y-2">
-            {dependents
-              .sort((a, b) => b.criticality - a.criticality)
-              .map((l) => (
-                <DepCard
-                  key={l.id}
-                  link={l}
-                  direction="in"
-                  onJumpToNode={onJumpToNode}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Risk flags */}
-      {node.risks.length > 0 && (
-        <div className="mb-4">
-          <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-            Risk flags
-          </p>
-          <ul className="space-y-1.5">
-            {node.risks.map((r) => (
-              <li key={r} className="flex items-start gap-2 text-[13px] text-[#8b8d98]">
-                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#fbbf24]" />
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Sidebar components ───────────────────────────────────────────────────────
 
 function FileGroup({
-  icon, label, children,
+  icon,
+  label,
+  children,
 }: {
-  icon: React.ReactNode; label: string; children: React.ReactNode;
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-[#2a2c36] py-3">
-      <div className="mb-1 flex items-center gap-1.5 px-3 font-mono text-[10px] uppercase tracking-[0.14em] text-[#5c5e6a]">
-        {icon}{label}
+    <div className="border-b border-line p-3">
+      <div className="mb-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+        {icon}
+        {label}
       </div>
-      <div>{children}</div>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
 
 function FileItem({
-  file, active, onClick,
+  file,
+  active,
+  onClick,
 }: {
-  file: ContextFile; active: boolean; onClick: () => void;
+  file: ContextFile;
+  active: boolean;
+  onClick: () => void;
 }) {
   const short = file.name.split("/").pop();
   return (
@@ -478,20 +146,43 @@ function FileItem({
       onClick={onClick}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left font-mono text-[12px] transition-colors duration-150",
-        active ? "bg-[#818cf8] text-white" : "text-[#8b8d98] hover:bg-[#181a22] hover:text-[#e8e9ed]",
+        active ? "bg-accent text-white" : "text-muted hover:bg-surface hover:text-ink",
       )}
     >
-      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-[#0c0d10]" : "bg-[#3a3c48]")} />
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-bg" : "bg-line-2")} />
       <span className="truncate">{short}</span>
     </button>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+function NodePreview({ node }: { node: GraphNode }) {
+  const deps = dependenciesOf(node.id);
+  const parents = dependentsOf(node.id);
+  return (
+    <aside className="hidden w-[360px] shrink-0 border-l border-line xl:block">
+      <div className="scroll-thin h-full overflow-y-auto p-4">
+        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-faint">Node preview</p>
+        <h2 className="mb-1 text-lg font-semibold text-ink">{node.label}</h2>
+        <p className="mb-4 text-[13px] leading-relaxed text-muted">{node.whatItIs}</p>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-line bg-surface p-3">
+            <p className="font-mono text-lg font-semibold text-ink">{deps.length}</p>
+            <p className="font-mono text-[10px] uppercase tracking-wide text-faint">Outgoing</p>
+          </div>
+          <div className="rounded-lg border border-line bg-surface p-3">
+            <p className="font-mono text-lg font-semibold text-ink">{parents.length}</p>
+            <p className="font-mono text-[10px] uppercase tracking-wide text-faint">Incoming</p>
+          </div>
+        </div>
+        <SubGraph node={node} graphData={GRAPH} onSelectNode={() => undefined} />
+      </div>
+    </aside>
+  );
+}
 
 export default function ExportPage() {
   return (
-    <React.Suspense fallback={<main className="h-screen bg-[#0c0d10]" />}>
+    <React.Suspense fallback={<main className="h-screen bg-bg" />}>
       <ExportPageContent />
     </React.Suspense>
   );
@@ -500,54 +191,71 @@ export default function ExportPage() {
 function ExportPageContent() {
   const searchParams = useSearchParams();
   const scanId = searchParams.get("scanId");
-  const [activeId, setActiveId] = React.useState(FILES[0].id);
-  const [fileLoad, setFileLoad] = React.useState<{
-    scanId: string;
-    files: ContextFile[] | null;
-    apiNotice: string | null;
-  } | null>(null);
+  const repoLabel = searchParams.get("repo") ?? (scanId ?? "acme/payments-platform");
+  const [files, setFiles] = React.useState<ContextFile[]>(DEMO_FILES);
+  const [activeId, setActiveId] = React.useState(DEMO_FILES[0].id);
   const [copied, setCopied] = React.useState(false);
-  const activeFileLoad = fileLoad?.scanId === scanId ? fileLoad : null;
-  const files = activeFileLoad?.files ?? FILES;
-  const apiNotice = activeFileLoad?.apiNotice;
-  const active = files.find((f) => f.id === activeId) ?? files[0];
+  const [loadingExport, setLoadingExport] = React.useState(Boolean(scanId));
+  const [exportError, setExportError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!scanId) return;
+    if (!scanId) {
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setFiles(DEMO_FILES);
+        setActiveId(DEMO_FILES[0].id);
+        setLoadingExport(false);
+        setExportError(null);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
 
     let cancelled = false;
-    async function load() {
-      try {
-        const response = await getScanExport(scanId!);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadingExport(true);
+      setExportError(null);
+    });
+    getScanExport(scanId)
+      .then((bundle) => {
         if (cancelled) return;
-        const mapped = response.files.map((file): ContextFile => ({
+        const nextFiles = bundle.files.map((file): ContextFile => ({
           id: file.path,
           name: file.path,
-          group: file.path === "system-brief.md" ? "brief" : file.path.startsWith("node-context/") ? "node" : file.path.startsWith("link-context/") ? "link" : "metadata",
+          group: groupForPath(file.path),
           content: file.markdown,
+          nodeId: file.path.startsWith("node-context/")
+            ? file.path.replace(/^node-context\//, "").replace(/\.md$/, "")
+            : undefined,
         }));
-        setFileLoad({ scanId: scanId!, files: mapped, apiNotice: null });
-        setActiveId(mapped[0]?.id ?? FILES[0].id);
-      } catch (err) {
-        if (!cancelled) {
-          setFileLoad({
-            scanId: scanId!,
-            files: null,
-            apiNotice: err instanceof Error ? err.message : "Unable to load backend export",
-          });
-        }
-      }
-    }
-    void load();
+        setFiles(nextFiles.length ? nextFiles : DEMO_FILES);
+        setActiveId(nextFiles[0]?.id ?? DEMO_FILES[0].id);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setExportError(err instanceof Error ? err.message : "Unable to load export package.");
+        setFiles(DEMO_FILES);
+        setActiveId(DEMO_FILES[0].id);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingExport(false);
+      });
+
     return () => {
       cancelled = true;
     };
   }, [scanId]);
 
-  const jumpToNode = React.useCallback((nodeId: string) => {
-    const file = files.find((f) => f.nodeId === nodeId);
-    if (file) setActiveId(file.id);
-  }, [files]);
+  const active = files.find((file) => file.id === activeId) ?? files[0] ?? DEMO_FILES[0];
+  const nodeFiles = files.filter((file) => file.group === "node");
+  const linkFiles = files.filter((file) => file.group === "link");
+  const riskFiles = files.filter((file) => file.group === "risk");
+  const metadataFiles = files.filter((file) => file.group === "metadata");
+  const activeNode =
+    active.nodeId ? GRAPH.nodes.find((node) => node.id === active.nodeId) ?? null : null;
 
   async function copyActive() {
     await navigator.clipboard.writeText(active.content);
@@ -567,139 +275,114 @@ function ExportPageContent() {
 
   function downloadPackage() {
     const combined = files.map(
-      (f) => `\n\n<!-- ===== ${f.name} ===== -->\n\n${f.content}`,
+      (file) => `\n\n<!-- ===== ${file.name} ===== -->\n\n${file.content}`,
     ).join("\n");
     downloadBlob(
-      scanId ? `${scanId}.context-package.md` : "payments-platform.context-package.md",
-      `${scanId ? `# Context Package — ${scanId}` : "# Context Package — acme/payments-platform"}\n${combined}`,
-    );
-  }
-
-  const nodeFiles = files.filter((f) => f.group === "node");
-  const linkFiles = files.filter((f) => f.group === "link");
-  const metadataFiles = files.filter((f) => f.group === "metadata");
-  const activeNode =
-    !scanId && active.nodeId ? GRAPH.nodes.find((n) => n.id === active.nodeId) ?? null : null;
-  const explicitScanFailed = Boolean(scanId && activeFileLoad?.apiNotice && !activeFileLoad.files);
-
-  if (explicitScanFailed) {
-    return (
-      <main className="flex h-screen items-center justify-center bg-[#0c0d10] px-6">
-        <div className="max-w-md rounded-lg border border-[#2a2c36] bg-[#181a22] p-5">
-          <p className="mb-2 text-sm font-semibold text-[#e8e9ed]">Real export unavailable</p>
-          <p className="text-[13px] leading-relaxed text-[#8b8d98]">{apiNotice}</p>
-          <Link
-            href={`/explore?scanId=${encodeURIComponent(scanId!)}`}
-            className="mt-4 inline-flex rounded-lg bg-[#818cf8] px-3 py-1.5 text-[13px] font-semibold text-white"
-          >
-            Back to scan
-          </Link>
-        </div>
-      </main>
+      `${repoLabel.replace(/[^a-z0-9._-]+/gi, "-")}.context-package.md`,
+      `# Context Package - ${repoLabel}\n${combined}`,
     );
   }
 
   return (
-    <main className="flex h-screen flex-col bg-[#0c0d10]">
-      {/* Header */}
-      <header className="border-b border-[#2a2c36]">
+    <main className="flex h-screen flex-col bg-bg">
+      <header className="border-b border-line">
         <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-3 px-4">
           <Link
             href={scanId ? `/explore?scanId=${encodeURIComponent(scanId)}` : "/explore"}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#2a2c36] px-2.5 py-1.5 text-[13px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </Link>
           <Logo />
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden font-mono text-[12px] text-[#5c5e6a] md:inline">
+            <span className="hidden font-mono text-[12px] text-faint md:inline">
               {files.length} files · {nodeFiles.length} nodes · {linkFiles.length} links
-              {apiNotice ? " · backend notice" : ""}
             </span>
             <button
               onClick={downloadPackage}
-              className="flex cursor-pointer items-center gap-2 rounded-lg bg-[#818cf8] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
+              className="flex cursor-pointer items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
             >
               <Package className="h-3.5 w-3.5" />
               Download package
             </button>
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
+      {(loadingExport || exportError) && (
+        <div className="border-b border-line bg-bg-2 px-4 py-2 font-mono text-[12px] text-faint">
+          {loadingExport ? "Loading scan export..." : `Demo fallback · ${exportError}`}
+        </div>
+      )}
+
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 overflow-hidden">
-        {/* File tree */}
-        <aside className="scroll-thin w-64 shrink-0 overflow-y-auto border-r border-[#2a2c36]">
+        <aside className="scroll-thin w-64 shrink-0 overflow-y-auto border-r border-line">
           <FileGroup icon={<FileText className="h-3 w-3" />} label="Overview">
-            {files.filter((f) => f.group === "brief").map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {files.filter((file) => file.group === "brief").map((file) => (
+              <FileItem key={file.id} file={file} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
-          {files.some((f) => f.group === "risk") && (
-            <FileGroup icon={<ShieldAlert className="h-3 w-3 text-[#fbbf24]" />} label="Risk surface">
-              {files.filter((f) => f.group === "risk").map((f) => (
-                <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+          {riskFiles.length > 0 && (
+            <FileGroup icon={<ShieldAlert className="h-3 w-3 text-warn" />} label="Risk surface">
+              {riskFiles.map((file) => (
+                <FileItem key={file.id} file={file} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
               ))}
             </FileGroup>
           )}
           {metadataFiles.length > 0 && (
-            <FileGroup icon={<FileText className="h-3 w-3" />} label={`Metadata · ${metadataFiles.length}`}>
-              {metadataFiles.map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            <FileGroup icon={<Database className="h-3 w-3" />} label={`Metadata · ${metadataFiles.length}`}>
+              {metadataFiles.map((file) => (
+                <FileItem key={file.id} file={file} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
               ))}
             </FileGroup>
           )}
           <FileGroup icon={<Boxes className="h-3 w-3" />} label={`Nodes · ${nodeFiles.length}`}>
-            {nodeFiles.map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {nodeFiles.map((file) => (
+              <FileItem key={file.id} file={file} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
           <FileGroup icon={<Share2 className="h-3 w-3" />} label={`Links · ${linkFiles.length}`}>
-            {linkFiles.map((f) => (
-              <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
+            {linkFiles.map((file) => (
+              <FileItem key={file.id} file={file} active={file.id === activeId} onClick={() => setActiveId(file.id)} />
             ))}
           </FileGroup>
         </aside>
 
-        {/* Preview */}
         <section className="flex min-w-0 flex-1 flex-col">
-          {/* Tab bar */}
-          <div className="flex items-center justify-between border-b border-[#2a2c36] px-4 py-2.5">
-            <span className="truncate font-mono text-[12px] text-[#5c5e6a]">{active.name}</span>
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-[12px] text-faint">{repoLabel}</p>
+              <h1 className="truncate text-[15px] font-semibold text-ink">{active.name}</h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={copyActive}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#2a2c36] bg-[#181a22] px-2.5 py-1.5 text-[12px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
               >
-                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy .md"}
+                {copied ? <Check className="h-3.5 w-3.5 text-ok" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Copied" : "Copy"}
               </button>
               <button
-                onClick={() =>
-                  downloadBlob(active.name.split("/").pop()!, active.content)
-                }
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#2a2c36] bg-[#181a22] px-2.5 py-1.5 text-[12px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+                onClick={() => downloadBlob(active.name.split("/").pop() ?? "context.md", active.content)}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] text-muted transition-colors duration-150 hover:border-line-2 hover:text-ink"
               >
                 <Download className="h-3.5 w-3.5" />
-                .md
+                File
               </button>
             </div>
           </div>
-
-          <div className="scroll-thin flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-2xl px-8 py-8">
-              {/* Node files get the rich structured view */}
-              {activeNode ? (
-                <NodeDocView node={activeNode} onJumpToNode={jumpToNode} />
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                  {active.content}
-                </ReactMarkdown>
-              )}
-            </div>
+          <div className="scroll-thin flex-1 overflow-y-auto px-5 py-5">
+            <article className="mx-auto max-w-3xl">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {active.content}
+              </ReactMarkdown>
+            </article>
           </div>
         </section>
+
+        {activeNode && <NodePreview node={activeNode} />}
       </div>
     </main>
   );
