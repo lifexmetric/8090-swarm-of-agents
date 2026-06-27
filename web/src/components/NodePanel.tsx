@@ -4,10 +4,15 @@ import * as React from "react";
 import { X, Crosshair, Copy, Check, ArrowRight } from "lucide-react";
 import {
   dependenciesOf,
+  dependenciesOfIn,
   dependentsOf,
+  dependentsOfIn,
   EDGE_KIND_META,
+  GRAPH,
+  type GraphData,
   NODE_KIND_META,
   nodeById,
+  nodeByIdIn,
   nodeContextMarkdown,
   type GraphNode,
 } from "@/lib/data";
@@ -35,15 +40,16 @@ function ConnRow({
 }
 
 export function NodePanel({
-  node, onClose, onFocus, onSelectLink,
+  node, graph = GRAPH, onClose, onFocus, onSelectLink,
 }: {
-  node: GraphNode; onClose: () => void; onFocus: () => void; onSelectLink: (id: string) => void;
+  node: GraphNode; graph?: GraphData; onClose: () => void; onFocus: () => void; onSelectLink: (id: string) => void;
 }) {
   const [copied, setCopied] = React.useState(false);
   const meta = NODE_KIND_META[node.kind];
   const Icon = NODE_ICON[node.kind];
-  const deps = dependenciesOf(node.id);
-  const dependents = dependentsOf(node.id);
+  const isMockGraph = graph === GRAPH;
+  const deps = isMockGraph ? dependenciesOf(node.id) : dependenciesOfIn(graph, node.id);
+  const dependents = isMockGraph ? dependentsOf(node.id) : dependentsOfIn(graph, node.id);
 
   async function copy() {
     await navigator.clipboard.writeText(nodeContextMarkdown(node));
@@ -113,7 +119,7 @@ export function NodePanel({
               <ConnRow
                 key={l.id}
                 arrow="out"
-                label={nodeById(l.target)?.label ?? l.target}
+                label={(isMockGraph ? nodeById(l.target) : nodeByIdIn(graph, l.target))?.label ?? l.target}
                 kindLabel={EDGE_KIND_META[l.kind].label}
                 color={EDGE_KIND_META[l.kind].color}
                 onClick={() => onSelectLink(l.id)}
@@ -129,7 +135,7 @@ export function NodePanel({
               <ConnRow
                 key={l.id}
                 arrow="in"
-                label={nodeById(l.source)?.label ?? l.source}
+                label={(isMockGraph ? nodeById(l.source) : nodeByIdIn(graph, l.source))?.label ?? l.source}
                 kindLabel={EDGE_KIND_META[l.kind].label}
                 color={EDGE_KIND_META[l.kind].color}
                 onClick={() => onSelectLink(l.id)}

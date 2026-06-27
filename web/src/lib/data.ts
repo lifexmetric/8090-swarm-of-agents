@@ -660,6 +660,10 @@ export function nodeById(id: string): GraphNode | undefined {
   return NODES.find((n) => n.id === id);
 }
 
+export function nodeByIdIn(graph: GraphData, id: string): GraphNode | undefined {
+  return graph.nodes.find((n) => n.id === id);
+}
+
 export function linkEndpoints(link: GraphLink): {
   source: GraphNode | undefined;
   target: GraphNode | undefined;
@@ -667,12 +671,27 @@ export function linkEndpoints(link: GraphLink): {
   return { source: nodeById(link.source), target: nodeById(link.target) };
 }
 
+export function linkEndpointsIn(graph: GraphData, link: GraphLink): {
+  source: GraphNode | undefined;
+  target: GraphNode | undefined;
+} {
+  return { source: nodeByIdIn(graph, link.source), target: nodeByIdIn(graph, link.target) };
+}
+
 export function dependenciesOf(nodeId: string): GraphLink[] {
   return LINKS.filter((l) => l.source === nodeId);
 }
 
+export function dependenciesOfIn(graph: GraphData, nodeId: string): GraphLink[] {
+  return graph.links.filter((l) => l.source === nodeId);
+}
+
 export function dependentsOf(nodeId: string): GraphLink[] {
   return LINKS.filter((l) => l.target === nodeId);
+}
+
+export function dependentsOfIn(graph: GraphData, nodeId: string): GraphLink[] {
+  return graph.links.filter((l) => l.target === nodeId);
 }
 
 // ---------------------------------------------------------------------------

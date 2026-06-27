@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, FileText, Boxes, Share2, Copy, Check, Download, Package } from "lucide-react";
@@ -12,6 +13,7 @@ import {
   linkEndpoints,
   nodeContextMarkdown,
 } from "@/lib/data";
+import { getScanExport } from "@/lib/api";
 import { Logo, cn } from "@/components/ui";
 
 interface ContextFile {
@@ -65,9 +67,60 @@ const mdComponents = {
 };
 
 export default function ExportPage() {
+  return (
+    <React.Suspense fallback={<main className="h-screen bg-[#000]" />}>
+      <ExportPageContent />
+    </React.Suspense>
+  );
+}
+
+function ExportPageContent() {
+  const searchParams = useSearchParams();
+  const scanId = searchParams.get("scanId");
   const [activeId, setActiveId] = React.useState(FILES[0].id);
+  const [fileLoad, setFileLoad] = React.useState<{
+    scanId: string;
+    files: ContextFile[] | null;
+    apiNotice: string | null;
+  } | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const active = FILES.find((f) => f.id === activeId) ?? FILES[0];
+  const activeFileLoad = fileLoad?.scanId === scanId ? fileLoad : null;
+  const files = activeFileLoad?.files ?? FILES;
+  const apiNotice = activeFileLoad?.apiNotice;
+  const active = files.find((f) => f.id === activeId) ?? files[0];
+
+  React.useEffect(() => {
+    if (!scanId) return;
+
+    let cancelled = false;
+    async function load() {
+      try {
+        const response = await getScanExport(scanId!);
+        if (cancelled) return;
+        const mapped = response.files.map((file): ContextFile => ({
+          id: file.path,
+          name: file.path,
+          group: file.path === "system-brief.md" ? "brief" : file.path.startsWith("node-context/") ? "node" : "link",
+          content: file.markdown,
+        }));
+        setFileLoad({ scanId: scanId!, files: mapped, apiNotice: null });
+        setActiveId(mapped[0]?.id ?? FILES[0].id);
+      } catch (err) {
+        if (!cancelled) {
+          setFileLoad({
+            scanId: scanId!,
+            files: null,
+            apiNotice: err instanceof Error ? err.message : "Unable to load backend export; showing mock package",
+          });
+          setActiveId(FILES[0].id);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
 
   async function copyActive() {
     await navigator.clipboard.writeText(active.content);
@@ -86,14 +139,14 @@ export default function ExportPage() {
   }
 
   function downloadPackage() {
-    const combined = FILES.map(
+    const combined = files.map(
       (f) => `\n\n<!-- ===== ${f.name} ===== -->\n\n${f.content}`,
     ).join("\n");
-    downloadBlob("payments-platform.context-package.md", `# Context Package — acme/payments-platform\n${combined}`);
+    downloadBlob(scanId ? `${scanId}.context-package.md` : "payments-platform.context-package.md", `# Context Package\n${combined}`);
   }
 
-  const nodeFiles = FILES.filter((f) => f.group === "node");
-  const linkFiles = FILES.filter((f) => f.group === "link");
+  const nodeFiles = files.filter((f) => f.group === "node");
+  const linkFiles = files.filter((f) => f.group === "link");
 
   return (
     <main className="flex h-screen flex-col bg-[#000]">
@@ -101,7 +154,7 @@ export default function ExportPage() {
       <header className="border-b border-[#2a2a2a]">
         <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-3 px-4">
           <Link
-            href="/explore"
+            href={scanId ? `/explore?scanId=${encodeURIComponent(scanId)}` : "/explore"}
             className="flex cursor-pointer items-center gap-1.5 border border-[#2a2a2a] px-2.5 py-1.5 text-[13px] text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -110,7 +163,8 @@ export default function ExportPage() {
           <Logo />
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden font-mono text-[12px] text-[#555] md:inline">
-              {FILES.length} files · {nodeFiles.length} nodes · {linkFiles.length} links
+              {files.length} files · {nodeFiles.length} nodes · {linkFiles.length} links
+              {apiNotice ? " · mock fallback" : ""}
             </span>
             <button
               onClick={downloadPackage}
@@ -127,7 +181,7 @@ export default function ExportPage() {
         {/* File tree */}
         <aside className="scroll-thin w-64 shrink-0 overflow-y-auto border-r border-[#2a2a2a]">
           <FileGroup icon={<FileText className="h-3 w-3" />} label="Overview">
-            {FILES.filter((f) => f.group === "brief").map((f) => (
+            {files.filter((f) => f.group === "brief").map((f) => (
               <FileItem key={f.id} file={f} active={f.id === activeId} onClick={() => setActiveId(f.id)} />
             ))}
           </FileGroup>

@@ -3,10 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Share2, ShieldAlert, FileCode2, Boxes } from "lucide-react";
-import { Logo, GithubMark, Btn } from "@/components/ui";
+import { Logo, GithubMark } from "@/components/ui";
 import { ScanOverlay } from "@/components/ScanOverlay";
+import { createScan } from "@/lib/api";
 
-const SAMPLES = ["acme/payments-platform", "vercel/next.js", "stripe/stripe-node"];
+const SAMPLES = ["fastify/fastify-plugin", "fastify/fastify-autoload", "stripe/stripe-node"];
 
 const FEATURES = [
   {
@@ -34,12 +35,24 @@ const FEATURES = [
 export default function LandingPage() {
   const [repo, setRepo] = React.useState("");
   const [scanning, setScanning] = React.useState(false);
+  const [scanId, setScanId] = React.useState<string | null>(null);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
-  function start(url?: string) {
+  async function start(url?: string) {
     const target = (url ?? repo).trim();
     if (!target) return;
     setRepo(target);
-    setScanning(true);
+    setSubmitError(null);
+    setScanId(null);
+
+    try {
+      const scan = await createScan(target);
+      setScanId(scan.id);
+      setScanning(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Backend unavailable; opening mock demo");
+      setScanning(true);
+    }
   }
 
   return (
@@ -86,7 +99,7 @@ export default function LandingPage() {
 
         {/* ── Input ── */}
         <form
-          onSubmit={(e) => { e.preventDefault(); start(); }}
+          onSubmit={(e) => { e.preventDefault(); void start(); }}
           className="mb-4 flex w-full max-w-xl items-center gap-0 border border-[#2a2a2a] bg-[#111] focus-within:border-[#3a3a3a]"
         >
           <label htmlFor="repo" className="sr-only">GitHub repository URL</label>
@@ -102,19 +115,26 @@ export default function LandingPage() {
           </div>
           <button
             type="submit"
-            className="flex shrink-0 cursor-pointer items-center gap-2 bg-[#ededed] px-4 py-3 text-sm font-semibold text-black transition-colors duration-150 hover:bg-white"
+            disabled={scanning}
+            className="flex shrink-0 cursor-pointer items-center gap-2 bg-[#ededed] px-4 py-3 text-sm font-semibold text-black transition-colors duration-150 hover:bg-white disabled:pointer-events-none disabled:opacity-50"
           >
             Visualize
             <ArrowRight className="h-4 w-4" />
           </button>
         </form>
 
+        {submitError && (
+          <p className="mb-4 max-w-xl text-[12px] text-[#f59e0b]">
+            {submitError}
+          </p>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#555]">
           <span>Try:</span>
           {SAMPLES.map((s) => (
             <button
               key={s}
-              onClick={() => start(s)}
+              onClick={() => void start(s)}
               className="cursor-pointer rounded-sm border border-[#2a2a2a] bg-[#111] px-2.5 py-1 font-mono text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
             >
               {s}
@@ -149,7 +169,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {scanning && <ScanOverlay repo={repo} />}
+      {scanning && <ScanOverlay repo={repo} scanId={scanId} />}
     </main>
   );
 }

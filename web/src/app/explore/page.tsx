@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import {
   type GraphData,
   type NodeKind,
 } from "@/lib/data";
+import { getScan, getScanGraph } from "@/lib/api";
 import { Graph3D, type Graph3DHandle } from "@/components/Graph3D";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
@@ -21,15 +23,68 @@ import { Logo, GithubMark, cn } from "@/components/ui";
 import { NODE_ICON } from "@/components/icons";
 
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
+const MOCK_REPO_LABEL = "acme/payments-platform";
 
 export default function ExplorePage() {
+  return (
+    <React.Suspense fallback={<main className="h-screen w-screen bg-[#000]" />}>
+      <ExplorePageContent />
+    </React.Suspense>
+  );
+}
+
+function ExplorePageContent() {
   const graphRef = React.useRef<Graph3DHandle>(null);
+  const searchParams = useSearchParams();
+  const scanId = searchParams.get("scanId");
 
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [activeKinds, setActiveKinds] = React.useState<Set<NodeKind>>(new Set(ALL_KINDS));
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
+  const [graphLoad, setGraphLoad] = React.useState<{
+    scanId: string;
+    graph: GraphData | null;
+    repoLabel: string;
+    apiNotice: string | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!scanId) return;
+
+    let cancelled = false;
+    async function load() {
+      try {
+        const [scan, graph] = await Promise.all([getScan(scanId!), getScanGraph(scanId!)]);
+        if (cancelled) return;
+        setGraphLoad({
+          scanId: scanId!,
+          graph,
+          repoLabel: scan.repoUrl.replace(/^https:\/\/github\.com\//, ""),
+          apiNotice: null,
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setGraphLoad({
+            scanId: scanId!,
+            graph: null,
+            repoLabel: MOCK_REPO_LABEL,
+            apiNotice: err instanceof Error ? err.message : "Unable to load backend graph; showing mock data",
+          });
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+
+  const activeGraphLoad = graphLoad?.scanId === scanId ? graphLoad : null;
+  const graph = activeGraphLoad?.graph ?? GRAPH;
+  const repoLabel = activeGraphLoad?.repoLabel ?? MOCK_REPO_LABEL;
+  const apiNotice = activeGraphLoad?.apiNotice;
 
   const selectNode = React.useCallback((id: string) => {
     if (!id) { setSelectedNodeId(null); setSelectedLinkId(null); return; }
@@ -45,13 +100,17 @@ export default function ExplorePage() {
   const toggleKind = (k: NodeKind) =>
     setActiveKinds((prev) => {
       const next = new Set(prev);
-      next.has(k) ? next.delete(k) : next.add(k);
+      if (next.has(k)) {
+        next.delete(k);
+      } else {
+        next.add(k);
+      }
       return next;
     });
 
   const filtered: GraphData = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    const nodes = GRAPH.nodes.filter((n) => {
+    const nodes = graph.nodes.filter((n) => {
       if (!activeKinds.has(n.kind)) return false;
       if (highRiskOnly && n.risks.length === 0) return false;
       if (q && !(
@@ -63,13 +122,13 @@ export default function ExplorePage() {
       return true;
     });
     const ids = new Set(nodes.map((n) => n.id));
-    return { nodes, links: GRAPH.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
-  }, [query, activeKinds, highRiskOnly]);
+    return { nodes, links: graph.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
+  }, [query, activeKinds, highRiskOnly, graph]);
 
-  const selectedNode = selectedNodeId ? GRAPH.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
-  const selectedLink = selectedLinkId ? GRAPH.links.find((l) => l.id === selectedLinkId) ?? null : null;
+  const selectedNode = selectedNodeId ? graph.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+  const selectedLink = selectedLinkId ? graph.links.find((l) => l.id === selectedLinkId) ?? null : null;
   const panelOpen = Boolean(selectedNode || selectedLink);
-  const highRiskCount = GRAPH.nodes.filter((n) => n.risks.length > 0).length;
+  const highRiskCount = graph.nodes.filter((n) => n.risks.length > 0).length;
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#000]">
@@ -94,7 +153,7 @@ export default function ExplorePage() {
             <div className="h-4 w-px bg-[#2a2a2a]" />
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-[#555]">
               <GithubMark className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden font-mono sm:inline">acme/payments-platform</span>
+              <span className="hidden font-mono sm:inline">{repoLabel}</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center gap-1 border border-[#2a2a2a] bg-[#111]">
@@ -136,7 +195,7 @@ export default function ExplorePage() {
                 </button>
               </div>
               <Link
-                href="/export"
+                href={scanId ? `/export?scanId=${encodeURIComponent(scanId)}` : "/export"}
                 className="flex cursor-pointer items-center gap-1.5 bg-[#ededed] px-2.5 py-1.5 text-[13px] font-semibold text-black transition-colors duration-150 hover:bg-white"
               >
                 <FileDown className="h-3.5 w-3.5" />
@@ -233,7 +292,7 @@ export default function ExplorePage() {
       {!panelOpen && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
           <div className="border border-[#2a2a2a] bg-[#000]/80 px-3.5 py-2 font-mono text-[12px] text-[#555] backdrop-blur-sm">
-            Top-down flow · drag to pan · scroll to zoom · click any dependency
+            {apiNotice ?? "Top-down flow · drag to pan · scroll to zoom · click any dependency"}
           </div>
         </div>
       )}
@@ -266,6 +325,7 @@ export default function ExplorePage() {
             {selectedNode && (
               <NodePanel
                 node={selectedNode}
+                graph={graph}
                 onClose={() => selectNode("")}
                 onFocus={() => graphRef.current?.focusNode(selectedNode.id)}
                 onSelectLink={selectLink}
@@ -274,6 +334,7 @@ export default function ExplorePage() {
             {selectedLink && (
               <LinkPanel
                 link={selectedLink}
+                graph={graph}
                 onClose={() => selectNode("")}
                 onSelectNode={selectNode}
               />

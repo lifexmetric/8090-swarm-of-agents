@@ -4,8 +4,11 @@ import * as React from "react";
 import { X, Copy, Check, ArrowRight, AlertTriangle } from "lucide-react";
 import {
   EDGE_KIND_META,
+  GRAPH,
+  type GraphData,
   linkContextMarkdown,
   linkEndpoints,
+  linkEndpointsIn,
   NODE_KIND_META,
   type GraphLink,
 } from "@/lib/data";
@@ -31,12 +34,12 @@ function CritBar({ value }: { value: number }) {
 }
 
 export function LinkPanel({
-  link, onClose, onSelectNode,
+  link, graph = GRAPH, onClose, onSelectNode,
 }: {
-  link: GraphLink; onClose: () => void; onSelectNode: (id: string) => void;
+  link: GraphLink; graph?: GraphData; onClose: () => void; onSelectNode: (id: string) => void;
 }) {
   const [copied, setCopied] = React.useState(false);
-  const { source, target } = linkEndpoints(link);
+  const { source, target } = graph === GRAPH ? linkEndpoints(link) : linkEndpointsIn(graph, link);
   const meta = EDGE_KIND_META[link.kind];
   const Icon = EDGE_ICON[link.kind];
   const SourceIcon = source ? NODE_ICON[source.kind] : null;
