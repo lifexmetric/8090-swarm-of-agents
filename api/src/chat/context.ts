@@ -201,10 +201,10 @@ function contextMarkdown(args: {
       : ["- No completed repository scans are available."]),
     ``,
     `## Relevant Nodes`,
-    ...(args.nodes.length > 0 ? args.nodes.map(nodeContextMarkdown) : ["No relevant nodes matched."]),
+    ...(args.nodes.length > 0 ? args.nodes.map((node) => nodeContextMarkdown(node)) : ["No relevant nodes matched."]),
     ``,
     `## Relevant Edges`,
-    ...(args.edges.length > 0 ? args.edges.map(edgeContextMarkdown) : ["No relevant edges matched."]),
+    ...(args.edges.length > 0 ? args.edges.map((edge) => edgeContextMarkdown(edge)) : ["No relevant edges matched."]),
     ``,
     `## Evidence Citations`,
     ...(args.citations.length > 0

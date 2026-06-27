@@ -602,6 +602,16 @@ describe("handoff chat backend", () => {
     expect(context.evidence[0].commitSha).toBe("abc1234");
     expect(context.generatedMarkdown).toContain("Evidence Citations");
     expect(formatCitationList(context.evidence)).toContain("[E1]");
+
+    const scanContext = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "What should I inspect across this scanned system?",
+      scanId: "scan_fixture",
+    });
+
+    expect(scanContext.nodes.length).toBeGreaterThan(1);
+    expect(scanContext.generatedMarkdown).toContain("Relevant Nodes");
   });
 
   it("constructs Backboard handoff prompts with secrets redacted", () => {
