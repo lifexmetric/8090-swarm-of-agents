@@ -67,9 +67,16 @@ export class ScanService {
       message: `Queued ${repoRef.owner}/${repoRef.name}${repoRef.treePath ? ` @ ${repoRef.treePath}` : ""}`,
     });
 
-    void this.processScan(scan.id).catch(() => {
-      // The failure has already been recorded by processScan.
-    });
+    if (this.config.synchronousScan) {
+      // Serverless / Vercel: await the full scan within this HTTP request.
+      await this.processScan(scan.id).catch(() => {
+        // Failure is already recorded in processScan; caller reads updated status.
+      });
+    } else {
+      void this.processScan(scan.id).catch(() => {
+        // The failure has already been recorded by processScan.
+      });
+    }
 
     return scan;
   }

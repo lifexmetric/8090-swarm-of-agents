@@ -30,6 +30,8 @@ export interface AtlasConfig {
   githubAllowedOrgs: string[];
   corsOrigin?: string;
   apiAuthToken?: string;
+  /** When true, startScan awaits processScan before returning (required for serverless/Vercel). */
+  synchronousScan?: boolean;
 }
 
 function firstNonEmpty(...values: Array<string | undefined | null>): string | undefined {
@@ -102,5 +104,6 @@ export function loadConfig(overrides: Partial<AtlasConfig> = {}): AtlasConfig {
     githubAllowedOrgs: overrides.githubAllowedOrgs ?? readCsv(firstNonEmpty(process.env.GITHUB_ALLOWED_ORGS)),
     corsOrigin: overrides.corsOrigin ?? firstNonEmpty(process.env.CORS_ORIGIN),
     apiAuthToken: overrides.apiAuthToken ?? firstNonEmpty(process.env.ATLAS_API_AUTH_TOKEN),
+    synchronousScan: overrides.synchronousScan ?? false,
   };
 }
