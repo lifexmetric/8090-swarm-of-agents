@@ -1,0 +1,406 @@
+"use client";
+
+import * as React from "react";
+import {
+  EDGE_KIND_META,
+  NODE_KIND_META,
+  type GraphData,
+  type GraphLink,
+  type GraphNode,
+} from "@/lib/data";
+
+export interface Graph3DHandle {
+  focusNode: (id: string) => void;
+  resetView: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+}
+
+interface Graph3DProps {
+  data: GraphData;
+  selectedNodeId: string | null;
+  selectedLinkId: string | null;
+  onSelectNode: (id: string) => void;
+  onSelectLink: (id: string) => void;
+}
+
+type Point = { x: number; y: number };
+
+const CANVAS = { width: 1500, height: 1840 };
+const NODE = { width: 188, height: 62 };
+
+const DEFAULT_POSITIONS: Record<string, Point> = {
+  "api-gateway": { x: 656, y: 150 },
+  "auth-layer": { x: 390, y: 320 },
+  idp: { x: 125, y: 320 },
+  "orders-module": { x: 656, y: 430 },
+  rabbitmq: { x: 656, y: 635 },
+  "payments-service": { x: 656, y: 860 },
+  redis: { x: 390, y: 860 },
+  "env-config": { x: 955, y: 860 },
+  "ledger-service": { x: 390, y: 1110 },
+  "rbc-rail-adapter": { x: 656, y: 1110 },
+  stripe: { x: 955, y: 1110 },
+  plaid: { x: 125, y: 1110 },
+  postgres: { x: 390, y: 1360 },
+  kafka: { x: 955, y: 1360 },
+  "notification-service": { x: 955, y: 1570 },
+  sendgrid: { x: 1220, y: 1570 },
+};
+
+function fallbackPosition(index: number): Point {
+  const col = index % 4;
+  const row = Math.floor(index / 4);
+  return { x: 140 + col * 300, y: 170 + row * 180 };
+}
+
+function centerOf(node: GraphNode, index: number): Point {
+  const p = DEFAULT_POSITIONS[node.id] ?? fallbackPosition(index);
+  return { x: p.x + NODE.width / 2, y: p.y + NODE.height / 2 };
+}
+
+function linkPath(source: Point, target: Point): string {
+  const dy = Math.max(95, Math.abs(target.y - source.y) * 0.48);
+  const c1 = { x: source.x, y: source.y + dy };
+  const c2 = { x: target.x, y: target.y - dy };
+  return `M ${source.x} ${source.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${target.x} ${target.y}`;
+}
+
+export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
+  function Graph3D(
+    { data, selectedNodeId, selectedLinkId, onSelectNode, onSelectLink },
+    ref,
+  ) {
+    const [size, setSize] = React.useState({ w: 0, h: 0 });
+    const [view, setView] = React.useState({ x: 0, y: 0, scale: 0.72 });
+    const [drag, setDrag] = React.useState<{
+      startX: number;
+      startY: number;
+      baseX: number;
+      baseY: number;
+    } | null>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+
+    // Track container size.
+    React.useEffect(() => {
+      const el = containerRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver((entries) => {
+        const r = entries[0].contentRect;
+        setSize({ w: r.width, h: r.height });
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
+
+    const nodeIndex = React.useMemo(() => {
+      const map = new Map<string, { node: GraphNode; index: number }>();
+      data.nodes.forEach((node, index) => map.set(node.id, { node, index }));
+      return map;
+    }, [data.nodes]);
+
+    // Compute the highlighted set based on the current selection.
+    const { hlNodes, hlLinks } = React.useMemo(() => {
+      const nodes = new Set<string>();
+      const links = new Set<string>();
+      if (selectedLinkId) {
+        const l = data.links.find((x) => x.id === selectedLinkId);
+        if (l) {
+          links.add(l.id);
+          nodes.add(l.source);
+          nodes.add(l.target);
+        }
+      } else if (selectedNodeId) {
+        nodes.add(selectedNodeId);
+        for (const l of data.links) {
+          if (l.source === selectedNodeId || l.target === selectedNodeId) {
+            links.add(l.id);
+            nodes.add(l.source);
+            nodes.add(l.target);
+          }
+        }
+      }
+      return { hlNodes: nodes, hlLinks: links };
+    }, [data, selectedNodeId, selectedLinkId]);
+
+    const hasSelection = hlNodes.size > 0;
+
+    const focusNode = React.useCallback((id: string) => {
+      const item = nodeIndex.get(id);
+      if (!item || size.w === 0 || size.h === 0) return;
+      const center = centerOf(item.node, item.index);
+      setView((current) => ({
+        ...current,
+        x: size.w / 2 - center.x * current.scale,
+        y: size.h / 2 - center.y * current.scale,
+      }));
+    }, [nodeIndex, size.h, size.w]);
+
+    React.useImperativeHandle(ref, () => ({
+      focusNode,
+      zoomIn: () => {
+        if (size.w === 0 || size.h === 0) return;
+        const nextScale = Math.min(1.45, view.scale * 1.16);
+        setView({
+          scale: nextScale,
+          x: size.w / 2 - ((size.w / 2 - view.x) / view.scale) * nextScale,
+          y: size.h / 2 - ((size.h / 2 - view.y) / view.scale) * nextScale,
+        });
+      },
+      zoomOut: () => {
+        if (size.w === 0 || size.h === 0) return;
+        const nextScale = Math.max(0.36, view.scale / 1.16);
+        setView({
+          scale: nextScale,
+          x: size.w / 2 - ((size.w / 2 - view.x) / view.scale) * nextScale,
+          y: size.h / 2 - ((size.h / 2 - view.y) / view.scale) * nextScale,
+        });
+      },
+      resetView: () => {
+        if (size.w === 0 || size.h === 0) return;
+        const scale = Math.min(
+          1.02,
+          Math.max(0.64, (size.w / CANVAS.width) * 0.9),
+        );
+        setView({
+          scale,
+          x: (size.w - CANVAS.width * scale) / 2,
+          y: 118,
+        });
+      },
+    }));
+
+    React.useEffect(() => {
+      if (size.w === 0 || size.h === 0) return;
+      const scale = Math.min(
+        1.02,
+        Math.max(0.64, (size.w / CANVAS.width) * 0.9),
+      );
+      setView({
+        scale,
+        x: (size.w - CANVAS.width * scale) / 2,
+        y: 118,
+      });
+    }, [size.h, size.w]);
+
+    function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+      event.preventDefault();
+      const nextScale = Math.min(1.45, Math.max(0.36, view.scale - event.deltaY * 0.0008));
+      const rect = event.currentTarget.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      const graphX = (mx - view.x) / view.scale;
+      const graphY = (my - view.y) / view.scale;
+      setView({
+        scale: nextScale,
+        x: mx - graphX * nextScale,
+        y: my - graphY * nextScale,
+      });
+    }
+
+    function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+      if ((event.target as HTMLElement).closest("[data-graph-control]")) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDrag({
+        startX: event.clientX,
+        startY: event.clientY,
+        baseX: view.x,
+        baseY: view.y,
+      });
+    }
+
+    function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+      if (!drag) return;
+      setView((current) => ({
+        ...current,
+        x: drag.baseX + event.clientX - drag.startX,
+        y: drag.baseY + event.clientY - drag.startY,
+      }));
+    }
+
+    function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+      if (drag) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      setDrag(null);
+    }
+
+    const visibleLinks = data.links
+      .map((link) => {
+        const sourceItem = nodeIndex.get(link.source);
+        const targetItem = nodeIndex.get(link.target);
+        if (!sourceItem || !targetItem) return null;
+        return {
+          link,
+          source: centerOf(sourceItem.node, sourceItem.index),
+          target: centerOf(targetItem.node, targetItem.index),
+        };
+      })
+      .filter(Boolean) as Array<{ link: GraphLink; source: Point; target: Point }>;
+
+    return (
+      <div
+        ref={containerRef}
+        className="relative h-full w-full cursor-grab overflow-hidden bg-[#000] active:cursor-grabbing"
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onDoubleClick={() => onSelectNode("")}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.16)_1px,transparent_1px)] bg-[length:72px_72px] opacity-[0.12]" />
+        <div
+          className="absolute left-0 top-0 origin-top-left transition-transform duration-150"
+          style={{
+            width: CANVAS.width,
+            height: CANVAS.height,
+            transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`,
+          }}
+        >
+          <svg
+            className="absolute inset-0 overflow-visible"
+            width={CANVAS.width}
+            height={CANVAS.height}
+            viewBox={`0 0 ${CANVAS.width} ${CANVAS.height}`}
+            aria-hidden="true"
+          >
+            <defs>
+              <filter id="dependencyGlow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <marker
+                id="arrow"
+                markerWidth="10"
+                markerHeight="10"
+                refX="8"
+                refY="5"
+                orient="auto"
+                markerUnits="strokeWidth"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#555" />
+              </marker>
+            </defs>
+
+            {/* quiet flow rails */}
+            {[
+              { y: 120, label: "Ingress" },
+              { y: 390, label: "Validation" },
+              { y: 610, label: "Queue" },
+              { y: 835, label: "Core processing" },
+              { y: 1085, label: "Rails + ledger" },
+              { y: 1340, label: "Storage + events" },
+              { y: 1550, label: "Notifications" },
+            ].map((rail) => (
+              <g key={rail.label}>
+                <line x1={80} y1={rail.y} x2={1400} y2={rail.y} stroke="#1f1f1f" strokeWidth={1} />
+                <text x={88} y={rail.y - 12} fill="#555" fontSize={11} fontFamily="var(--font-mono)">
+                  {rail.label}
+                </text>
+              </g>
+            ))}
+
+            {visibleLinks.map(({ link, source, target }) => {
+              const meta = EDGE_KIND_META[link.kind];
+              const active = hlLinks.has(link.id);
+              const dim = hasSelection && !active;
+              const path = linkPath(source, target);
+              const width = active ? 2.2 + link.criticality * 0.18 : 1.1;
+              const glowOpacity = active ? 0.58 : hasSelection ? 0 : 0.12;
+              return (
+                <g key={link.id} data-graph-control="true">
+                  <path
+                    d={path}
+                    fill="none"
+                    stroke={meta.color}
+                    strokeWidth={active ? 14 : 9}
+                    strokeOpacity={glowOpacity}
+                    strokeLinecap="round"
+                    filter="url(#dependencyGlow)"
+                  />
+                  <path
+                    d={path}
+                    fill="none"
+                    stroke={dim ? "#222" : meta.color}
+                    strokeWidth={width}
+                    strokeOpacity={dim ? 0.45 : active ? 0.95 : 0.42}
+                    strokeDasharray={meta.dashed ? "8 7" : undefined}
+                    strokeLinecap="round"
+                    markerEnd={active ? "url(#arrow)" : undefined}
+                    className="cursor-pointer transition-opacity duration-150"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectLink(link.id);
+                    }}
+                  />
+                  <path
+                    d={path}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={18}
+                    className="cursor-pointer"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectLink(link.id);
+                    }}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+
+          {data.nodes.map((node, index) => {
+            const position = DEFAULT_POSITIONS[node.id] ?? fallbackPosition(index);
+            const meta = NODE_KIND_META[node.kind];
+            const active = selectedNodeId === node.id || hlNodes.has(node.id);
+            const dim = hasSelection && !active;
+            const inbound = data.links.filter((link) => link.target === node.id).length;
+            const outbound = data.links.filter((link) => link.source === node.id).length;
+            return (
+              <button
+                key={node.id}
+                data-graph-control="true"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectNode(node.id);
+                  focusNode(node.id);
+                }}
+                className="absolute cursor-pointer border bg-[#0a0a0a] px-3 py-2 text-left transition-[border-color,background-color,opacity,box-shadow] duration-150 hover:bg-[#111]"
+                style={{
+                  left: position.x,
+                  top: position.y,
+                  width: NODE.width,
+                  minHeight: NODE.height,
+                  borderColor: active ? meta.color : "#2a2a2a",
+                  opacity: dim ? 0.32 : 1,
+                  boxShadow: active ? `0 0 24px ${meta.color}33` : "none",
+                }}
+              >
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: meta.color }}
+                  />
+                  <span className="truncate font-mono text-[12px] font-semibold text-[#ededed]">
+                    {node.label}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono text-[10px] uppercase tracking-wide text-[#555]">
+                    {meta.group}
+                  </span>
+                  <span className="font-mono text-[10px] text-[#555]">
+                    {inbound} in · {outbound} out
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  },
+);

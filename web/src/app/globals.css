@@ -1,0 +1,123 @@
+/* Hallmark · macrostructure: Workbench · tone: austere/technical · anchor hue: monochrome + blue */
+@import "tailwindcss";
+
+@theme {
+  /* ── Surfaces ── */
+  --color-bg:        #000000;
+  --color-bg-2:      #0a0a0a;
+  --color-surface:   #111111;
+  --color-surface-2: #181818;
+  --color-surface-3: #1f1f1f;
+
+  /* ── Text ── */
+  --color-ink:   #ededed;
+  --color-muted: #888888;
+  --color-faint: #555555;
+
+  /* ── Borders ── */
+  --color-line:  #2a2a2a;
+  --color-line-2:#3a3a3a;
+
+  /* ── Accent (one — white/inverted) ── */
+  --color-accent: #ffffff;
+
+  /* ── Node group colors (3 + neutral) ── */
+  --color-node-service:  #f0f0f0;
+  --color-node-infra:    #3b82f6;
+  --color-node-external: #f97316;
+  --color-node-neutral:  #555555;
+
+  /* ── Semantic status ── */
+  --color-ok:   #22c55e;
+  --color-warn: #f59e0b;
+  --color-err:  #ef4444;
+
+  /* ── Fonts ── */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* ── Easing ── */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Duration ── */
+  --dur-fast:   150ms;
+  --dur-normal: 200ms;
+  --dur-slow:   300ms;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: clip;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.6;
+}
+
+/* ── Scrollbars ── */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 0;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--color-faint);
+}
+
+/* ── Reusable surface ── */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+}
+.panel-2 {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line);
+}
+
+/* ── Animations ── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-right {
+  animation: slide-right var(--dur-normal) var(--ease-out) both;
+}
+
+/* ── Blink cursor ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
