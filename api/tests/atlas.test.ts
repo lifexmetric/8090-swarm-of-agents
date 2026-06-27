@@ -16,6 +16,7 @@ import { buildWorkspaceGraph } from "../src/graph/workspace.js";
 import { buildHandoffMap, buildScanContext } from "../src/graph/context.js";
 import { buildGraphFromArtifacts } from "../src/graph/normalize.js";
 import { parseGitHubRepo, repoUrlSchema } from "../src/github/url.js";
+import { applyScanScope, scopedRepositoryLabel } from "../src/scanner/scope.js";
 import { scanRepository } from "../src/scanner/scanner.js";
 import { buildApp } from "../src/server/app.js";
 import { ScanService } from "../src/server/scan-service.js";
@@ -117,6 +118,61 @@ describe("repo URL validation", () => {
   it("rejects non-GitHub URLs", () => {
     expect(() => repoUrlSchema.parse("https://gitlab.com/a/b")).toThrow();
     expect(() => repoUrlSchema.parse("not-a-repo")).toThrow();
+  });
+});
+
+describe("scan scope", () => {
+  it("prefixes artifact paths and labels scoped repository roots", async () => {
+    const repoRef = parseGitHubRepo("https://github.com/lifexmetric/8090-swarm-of-agents/tree/main/banking-system");
+    const scopedRoot = path.resolve("tests/fixtures/sample-js");
+    const artifacts = applyScanScope(await scanRepository(scopedRoot, { maxFiles: 100, maxFileBytes: 100_000 }), repoRef);
+
+    expect(artifacts.scanScope?.treePath).toBe("banking-system");
+    expect(artifacts.repoRoot).toBe("banking-system");
+    expect(artifacts.files.every((file) => file.path.startsWith("banking-system/"))).toBe(true);
+    expect(scopedRepositoryLabel({ owner: "lifexmetric", name: "8090-swarm-of-agents" }, artifacts.scanScope)).toBe(
+      "lifexmetric/8090-swarm-of-agents/banking-system",
+    );
+
+    const graph = buildGraphFromArtifacts({
+      repository: {
+        ...repoRecord("repo_scoped"),
+        owner: "lifexmetric",
+        name: "8090-swarm-of-agents",
+      },
+      commitSha: "abc1234",
+      artifacts,
+      backboard: fakeBackboard(),
+    });
+    const root = graph.nodes.find((node) => node.path === "banking-system");
+    expect(root?.label).toBe("lifexmetric/8090-swarm-of-agents/banking-system");
+  });
+});
+
+describe("service mesh from service.config.json", () => {
+  const bankingRoot = path.resolve("..", "banking-system");
+
+  it("models declared microservices and HTTP dependencies for banking-system", async () => {
+    const artifacts = await scanRepository(bankingRoot, { maxFiles: 1500, maxFileBytes: 250_000 });
+    const serviceDeclarations = artifacts.findings.filter((finding) => finding.detector === "service-config-declaration");
+    expect(serviceDeclarations.length).toBeGreaterThanOrEqual(40);
+
+    const graph = buildGraphFromArtifacts({
+      repository: repoRecord("repo_banking"),
+      commitSha: "abc1234",
+      artifacts,
+      backboard: fakeBackboard(),
+    });
+
+    const services = graph.nodes.filter((node) => node.label.endsWith("-service"));
+    expect(services.length).toBeGreaterThanOrEqual(40);
+    expect(graph.links.filter((link) => link.kind === "sync").length).toBeGreaterThan(50);
+    expect(graph.links.filter((link) => link.kind === "async").length).toBeGreaterThan(20);
+
+    const mobile = graph.nodes.find((node) => node.label === "mobile-banking-service");
+    expect(mobile).toBeTruthy();
+    const mobileDeps = graph.links.filter((link) => link.source === mobile?.id && link.kind === "sync");
+    expect(mobileDeps.length).toBeGreaterThanOrEqual(3);
   });
 });
 

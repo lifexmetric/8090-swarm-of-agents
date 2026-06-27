@@ -9,6 +9,7 @@ import { buildScanContext } from "../graph/context.js";
 import { buildGraphFromArtifacts } from "../graph/normalize.js";
 import type { BackboardSynthesis, RepositoryRecord, ScanArtifacts, ScanRecord } from "../types/domain.js";
 import { newId, stableId } from "../util/ids.js";
+import { applyScanScope } from "../scanner/scope.js";
 import { scanRepository } from "../scanner/scanner.js";
 
 export interface BackboardLike {
@@ -45,11 +46,11 @@ export class ScanService {
     this.repository.ensureWorkspace(workspaceId);
 
     const repository = this.repository.upsertRepository({
-      id: stableId("repo", workspaceId, repoRef.owner, repoRef.name),
+      id: stableId("repo", workspaceId, repoRef.owner, repoRef.name, repoRef.treePath ?? ""),
       workspaceId,
       owner: repoRef.owner,
       name: repoRef.name,
-      url: repoRef.normalizedUrl,
+      url: repoRef.targetUrl ?? repoRef.normalizedUrl,
       cloneUrl: repoRef.cloneUrl,
     });
 
@@ -63,7 +64,7 @@ export class ScanService {
     this.repository.addEvent({
       scanId: scan.id,
       type: "queued",
-      message: `Queued ${repoRef.owner}/${repoRef.name}`,
+      message: `Queued ${repoRef.owner}/${repoRef.name}${repoRef.treePath ? ` @ ${repoRef.treePath}` : ""}`,
     });
 
     void this.processScan(scan.id).catch(() => {
@@ -126,10 +127,13 @@ export class ScanService {
         });
       }
 
-      const artifacts = await scanRepository(scanRoot, {
-        maxFiles: this.config.scanMaxFiles,
-        maxFileBytes: this.config.scanMaxFileBytes,
-      });
+      const artifacts = applyScanScope(
+        await scanRepository(scanRoot, {
+          maxFiles: this.config.scanMaxFiles,
+          maxFileBytes: this.config.scanMaxFileBytes,
+        }),
+        requestedScope,
+      );
 
       this.repository.updateRepositoryPackage(repo.id, artifacts.package.name ?? null, cloned.commitSha);
 
@@ -173,6 +177,7 @@ export class ScanService {
         repository: updatedRepo,
         graph,
         commitSha: cloned.commitSha,
+        scanScope: artifacts.scanScope,
         backboard: {
           assistantId: backboard.assistantId,
           threadId: backboard.threadId,
@@ -207,7 +212,7 @@ export class ScanService {
       this.repository.addEvent({
         scanId,
         type: "complete",
-        message: `Completed scan for ${repo.owner}/${repo.name}`,
+        message: `Completed scan for ${repo.owner}/${repo.name}${requestedScope.treePath ? ` @ ${requestedScope.treePath}` : ""}`,
       });
 
       return this.repository.getScan(scanId)!;

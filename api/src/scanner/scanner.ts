@@ -3,6 +3,7 @@ import path from "node:path";
 import { stableId } from "../util/ids.js";
 import { redactSecrets } from "../util/redact.js";
 import type { Evidence, FileInventory, Finding, PackageInventory, ScanArtifacts } from "../types/domain.js";
+import { parseServiceConfig, SERVICE_CONFIG_FILE } from "./service-config.js";
 
 const IGNORED_DIRS = new Set([
   ".git",
@@ -25,7 +26,9 @@ const SECRET_FILE_NAMES = new Set([
 ]);
 
 const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]);
-const CONFIG_FILE_RE = /(^|\/)(package\.json|tsconfig[^/]*\.json|next\.config\.[jt]s|vite\.config\.[jt]s|webpack\.config\.[jt]s|drizzle\.config\.[jt]s|prisma\/schema\.prisma)$/;
+const CONFIG_FILE_RE = /(^|\/)(package\.json|service\.config\.json|tsconfig[^/]*\.json|next\.config\.[jt]s|vite\.config\.[jt]s|webpack\.config\.[jt]s|drizzle\.config\.[jt]s|prisma\/schema\.prisma)$/;
+const COMPOSE_FILE_RE = /(^|\/)docker-compose[^/]*\.ya?ml$/;
+const CATALOG_YAML_RE = /(^|\/)catalog\/[^/]+\.ya?ml$/;
 const DOC_FILE_RE = /(^|\/)(readme|architecture|docs?)[^/]*\.md$/i;
 const SQL_FILE_RE = /\.sql$/i;
 
@@ -82,8 +85,13 @@ function languageFor(filePath: string): string {
   return ext.slice(1) || "text";
 }
 
+function posixPath(relativePath: string): string {
+  return relativePath.split(path.sep).join("/");
+}
+
 function shouldIgnore(relativePath: string): boolean {
-  const parts = relativePath.split(path.sep);
+  const normalized = posixPath(relativePath);
+  const parts = normalized.split("/");
   if (parts.some((part) => IGNORED_DIRS.has(part))) return true;
   const base = path.basename(relativePath);
   if (SECRET_FILE_NAMES.has(base.toLowerCase())) return true;
@@ -94,14 +102,39 @@ function shouldIgnore(relativePath: string): boolean {
 }
 
 function isReadableTarget(relativePath: string): boolean {
-  const ext = path.extname(relativePath).toLowerCase();
+  const normalized = posixPath(relativePath);
+  const ext = path.extname(normalized).toLowerCase();
   return (
     SOURCE_EXTENSIONS.has(ext) ||
-    CONFIG_FILE_RE.test(relativePath) ||
-    DOC_FILE_RE.test(relativePath) ||
-    SQL_FILE_RE.test(relativePath) ||
-    relativePath.endsWith("schema.prisma")
+    CONFIG_FILE_RE.test(normalized) ||
+    COMPOSE_FILE_RE.test(normalized) ||
+    CATALOG_YAML_RE.test(normalized) ||
+    DOC_FILE_RE.test(normalized) ||
+    SQL_FILE_RE.test(normalized) ||
+    normalized.endsWith("schema.prisma")
   );
+}
+
+function scanYamlTopology(relativePath: string, text: string): Finding[] {
+  const findings: Finding[] = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    for (const match of line.matchAll(/https?:\/\/([a-zA-Z0-9._-]+)(?::(\d+))?/g)) {
+      const host = match[1].toLowerCase();
+      if (IGNORED_HOSTS.has(host)) continue;
+      if (!host.includes(".") && !host.includes("-")) continue;
+      if (NON_SERVICE_HOST_RE.test(host)) continue;
+      const ev = evidenceFromLine({
+        filePath: relativePath,
+        line,
+        lineNumber: index + 1,
+        detector: "service-url-reference",
+        confidenceReason: "Topology manifest references an HTTP service endpoint URL.",
+      });
+      findings.push(findingFromEvidence("http", host, match[2] ? `${host}:${match[2]}` : host, ev));
+    }
+  });
+  return findings;
 }
 
 async function walkRepo(root: string, options: ScannerOptions): Promise<{
@@ -458,9 +491,39 @@ export async function scanRepository(repoRoot: string, options: ScannerOptions):
       selectedSnippets.push(...parsed.evidence.slice(0, 25));
     }
 
+    if (candidate.path.endsWith(SERVICE_CONFIG_FILE)) {
+      const serviceFindings = parseServiceConfig(candidate.path, text);
+      findings.push(...serviceFindings);
+      selectedSnippets.push(
+        ...serviceFindings.slice(0, 12).map((finding) => ({
+          filePath: finding.filePath,
+          lineStart: finding.lineStart,
+          lineEnd: finding.lineEnd,
+          snippet: finding.snippet,
+          detector: finding.detector,
+          confidenceReason: finding.confidenceReason,
+        })),
+      );
+    }
+
     const scanned = scanTextFile(candidate.path, text);
     findings.push(...scanned.findings);
     selectedSnippets.push(...scanned.snippets.slice(0, 120));
+
+    if (COMPOSE_FILE_RE.test(candidate.path) || CATALOG_YAML_RE.test(candidate.path)) {
+      const topologyFindings = scanYamlTopology(candidate.path, text);
+      findings.push(...topologyFindings);
+      selectedSnippets.push(
+        ...topologyFindings.slice(0, 20).map((finding) => ({
+          filePath: finding.filePath,
+          lineStart: finding.lineStart,
+          lineEnd: finding.lineEnd,
+          snippet: finding.snippet,
+          detector: finding.detector,
+          confidenceReason: finding.confidenceReason,
+        })),
+      );
+    }
   }
 
   for (const pkgName of Object.keys({ ...packageInventory.dependencies, ...packageInventory.devDependencies })) {

@@ -240,7 +240,8 @@ export class BackboardClient {
       repository: {
         owner: args.repository.owner,
         name: args.repository.name,
-        url: args.repository.url,
+        url: args.artifacts.scanScope?.targetUrl ?? args.repository.url,
+        scanScope: args.artifacts.scanScope ?? null,
         commitSha: args.commitSha,
         packageName: args.artifacts.package.name,
       },
@@ -264,7 +265,7 @@ export class BackboardClient {
       selectedSnippets: args.artifacts.selectedSnippets.slice(0, 80),
     };
 
-    const prompt = `Analyze this Atlas repository scan. Return concise JSON with keys: repoPurpose, keyModules, detectedDependencies, riskAreas, nodeSummaries, edgeSummaries, crossRepoConnectionClues. Use only provided evidence. If a claim is unsupported, omit it.
+    const prompt = `Analyze this Atlas repository scan. Return concise JSON with keys: repoPurpose, keyModules, detectedDependencies, riskAreas, nodeSummaries, edgeSummaries, crossRepoConnectionClues. Use only provided evidence. If a claim is unsupported, omit it. When scanScope.treePath is present, treat that subdirectory as the repository root for this analysis and ignore files outside that scope.
 
 ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
 

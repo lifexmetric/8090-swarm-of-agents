@@ -153,8 +153,15 @@ export interface Finding {
   confidenceReason: string;
 }
 
+export interface ScanScope {
+  targetUrl?: string;
+  treeRef?: string;
+  treePath?: string;
+}
+
 export interface ScanArtifacts {
   repoRoot: string;
+  scanScope?: ScanScope;
   package: PackageInventory;
   files: FileInventory[];
   findings: Finding[];

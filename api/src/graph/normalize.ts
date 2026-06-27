@@ -12,6 +12,8 @@ import type {
 } from "../types/domain.js";
 import { stableId } from "../util/ids.js";
 import { packageFromImport } from "../scanner/scanner.js";
+import { serviceNameFromConfigPath } from "../scanner/service-config.js";
+import { scopedRepositoryLabel, scopedRepositoryPath, scopedRepositoryUrl } from "../scanner/scope.js";
 
 function evidenceFromFinding(finding: Finding): Evidence {
   return {
@@ -37,6 +39,8 @@ function unique<T>(values: T[]): T[] {
 }
 
 function moduleNameForFile(filePath: string): string {
+  const serviceMatch = filePath.replace(/\\/g, "/").match(/\/([^/]+-service)\//);
+  if (serviceMatch) return serviceMatch[1];
   const parts = filePath.split("/");
   if (parts[0] === "src" && parts[1]) return parts[1].replace(/\.[^.]+$/, "");
   if (["app", "pages", "server", "api", "routes", "lib"].includes(parts[0]) && parts[1]) {
@@ -44,6 +48,213 @@ function moduleNameForFile(filePath: string): string {
   }
   if (parts.length > 1) return parts[0];
   return path.basename(filePath).replace(/\.[^.]+$/, "");
+}
+
+function microserviceNodeId(repositoryId: string, serviceName: string): string {
+  return stableId("repo", repositoryId, "microservice", serviceName);
+}
+
+function topicNodeId(repositoryId: string, topic: string): string {
+  return stableId("repo", repositoryId, "topic", topic);
+}
+
+function datastoreNodeId(repositoryId: string, storeLabel: string): string {
+  return stableId("repo", repositoryId, "datastore", storeLabel);
+}
+
+function serviceConfigPath(serviceName: string, findings: Finding[]): string | undefined {
+  const declaration = findings.find(
+    (finding) => finding.detector === "service-config-declaration" && finding.label === serviceName,
+  );
+  if (!declaration) return undefined;
+  return declaration.filePath.replace(/\/service\.config\.json$/, "");
+}
+
+function addServiceMeshFromConfig(args: {
+  repository: RepositoryRecord;
+  artifacts: ScanArtifacts;
+  repoNodeId: string;
+  nodes: Map<string, GraphNode>;
+  links: Map<string, GraphLink>;
+}): boolean {
+  const { repository, artifacts, repoNodeId, nodes, links } = args;
+  const declarations = artifacts.findings.filter((finding) => finding.detector === "service-config-declaration");
+  if (declarations.length === 0) return false;
+
+  for (const declaration of declarations) {
+    const serviceName = declaration.label;
+    const [domain = "Service", endpoint = "", port = ""] = declaration.value.split("|");
+    const servicePath = serviceConfigPath(serviceName, artifacts.findings) ?? serviceName;
+    const nodeId = microserviceNodeId(repository.id, serviceName);
+    const evidence = [evidenceFromFinding(declaration)];
+
+    addNode(nodes, {
+      id: nodeId,
+      label: serviceName,
+      kind: "service",
+      domain,
+      whatItIs: endpoint
+        ? `Runnable microservice exposing ${endpoint}${port ? ` on port ${port}` : ""}.`
+        : `Runnable microservice declared in service.config.json.`,
+      whyItExists: "Part of the scanned service catalog with declared downstream dependencies and event flows.",
+      owns: unique([
+        ...(endpoint ? [endpoint] : []),
+        ...(port ? [`port ${port}`] : []),
+      ]),
+      confidence: "confirmed",
+      risks: [],
+      path: servicePath,
+      repositoryId: repository.id,
+      evidence,
+    });
+
+    addLink(links, {
+      id: stableId(repository.id, "repo-service", serviceName),
+      source: repoNodeId,
+      target: nodeId,
+      kind: "config",
+      criticality: 2,
+      summary: `${declaration.label} is a declared microservice in this scan scope.`,
+      code: declaration.snippet,
+      codePath: `${declaration.filePath}:L${declaration.lineStart}`,
+      contract: `service.config.json declaration: ${serviceName}`,
+      failure: "Service startup depends on declared downstream dependencies and broker connectivity.",
+      risks: [],
+      confidence: "confirmed",
+      repositoryId: repository.id,
+      evidence,
+    });
+  }
+
+  for (const finding of artifacts.findings.filter((item) => item.detector === "service-config-dependency")) {
+    const sourceName = serviceNameFromConfigPath(finding.filePath);
+    if (!sourceName) continue;
+    const sourceId = microserviceNodeId(repository.id, sourceName);
+    const targetId = microserviceNodeId(repository.id, finding.label);
+    if (!nodes.has(sourceId)) continue;
+
+    if (!nodes.has(targetId)) {
+      addNode(nodes, {
+        id: targetId,
+        label: finding.label,
+        kind: "service",
+        domain: "Service",
+        whatItIs: `Downstream service referenced by ${sourceName}.`,
+        whyItExists: "Declared as an HTTP dependency in service.config.json.",
+        owns: [],
+        confidence: "confirmed",
+        risks: [],
+        path: finding.label,
+        repositoryId: repository.id,
+        evidence: [evidenceFromFinding(finding)],
+      });
+    }
+
+    addLink(links, {
+      id: stableId(repository.id, "service-call", sourceName, finding.label),
+      source: sourceId,
+      target: targetId,
+      kind: "sync",
+      criticality: 3,
+      summary: `${sourceName} calls ${finding.label} over HTTP.`,
+      code: finding.snippet,
+      codePath: `${finding.filePath}:L${finding.lineStart}`,
+      contract: `HTTP dependency: ${finding.value}`,
+      failure: "Downstream service outage or contract drift breaks this call path.",
+      risks: [],
+      confidence: "confirmed",
+      repositoryId: repository.id,
+      evidence: [evidenceFromFinding(finding)],
+    });
+  }
+
+  for (const finding of artifacts.findings.filter((item) => item.detector.startsWith("service-config-topic-"))) {
+    const sourceName = serviceNameFromConfigPath(finding.filePath);
+    if (!sourceName) continue;
+    const sourceId = microserviceNodeId(repository.id, sourceName);
+    if (!nodes.has(sourceId)) continue;
+    const topicId = topicNodeId(repository.id, finding.label);
+    const produced = finding.value === "produced";
+
+    if (!nodes.has(topicId)) {
+      addNode(nodes, {
+        id: topicId,
+        label: finding.label,
+        kind: "queue",
+        domain: "Messaging",
+        whatItIs: `Event topic ${finding.label}.`,
+        whyItExists: "Declared in service.config.json as part of the async event topology.",
+        owns: [],
+        confidence: "confirmed",
+        risks: [],
+        repositoryId: repository.id,
+        evidence: [evidenceFromFinding(finding)],
+      });
+    }
+
+    addLink(links, {
+      id: stableId(repository.id, "service-topic", sourceName, finding.label, finding.value),
+      source: produced ? sourceId : topicId,
+      target: produced ? topicId : sourceId,
+      kind: "async",
+      criticality: 2,
+      summary: produced
+        ? `${sourceName} publishes events to ${finding.label}.`
+        : `${sourceName} consumes events from ${finding.label}.`,
+      code: finding.snippet,
+      codePath: `${finding.filePath}:L${finding.lineStart}`,
+      contract: `Event topic ${finding.value}: ${finding.label}`,
+      failure: "Broker lag, schema drift, or missing consumers can break async workflows.",
+      risks: [],
+      confidence: "confirmed",
+      repositoryId: repository.id,
+      evidence: [evidenceFromFinding(finding)],
+    });
+  }
+
+  for (const finding of artifacts.findings.filter((item) => item.detector === "service-config-datastore")) {
+    const sourceName = serviceNameFromConfigPath(finding.filePath);
+    if (!sourceName) continue;
+    const sourceId = microserviceNodeId(repository.id, sourceName);
+    if (!nodes.has(sourceId)) continue;
+    const storeId = datastoreNodeId(repository.id, finding.label);
+    const kind: GraphNode["kind"] = /kafka|queue|topic|sqs|pubsub|rabbit/i.test(finding.value) ? "queue" : "database";
+
+    if (!nodes.has(storeId)) {
+      addNode(nodes, {
+        id: storeId,
+        label: finding.label,
+        kind,
+        domain: kind === "queue" ? "Messaging" : "Data",
+        whatItIs: `Data store or broker connection (${finding.value}).`,
+        whyItExists: "Declared in service.config.json for durable state or async messaging.",
+        owns: [],
+        confidence: "confirmed",
+        risks: [],
+        repositoryId: repository.id,
+        evidence: [evidenceFromFinding(finding)],
+      });
+    }
+
+    addLink(links, {
+      id: stableId(repository.id, "service-datastore", sourceName, finding.label),
+      source: sourceId,
+      target: storeId,
+      kind: kind === "queue" ? "async" : "db",
+      criticality: 3,
+      summary: `${sourceName} connects to ${finding.label}.`,
+      code: finding.snippet,
+      codePath: `${finding.filePath}:L${finding.lineStart}`,
+      contract: `Data store: ${finding.value}`,
+      failure: "Store or broker outage breaks reads, writes, or event delivery for this service.",
+      risks: [],
+      confidence: "confirmed",
+      repositoryId: repository.id,
+      evidence: [evidenceFromFinding(finding)],
+    });
+  }
+
+  return true;
 }
 
 function moduleNameForRelativeImport(sourceFilePath: string, importValue: string): string | null {
@@ -138,32 +349,49 @@ export function buildGraphFromArtifacts(args: {
   const repoDocs = firstEvidence(artifacts.findings, "doc");
   const packageEvidence = firstEvidence(artifacts.findings, "config", "package.json");
   const directPackageNameEvidence = packageNameEvidence(artifacts.findings, artifacts.package.name);
-  const repoPurpose = artifacts.package.name
-    ? `${repository.owner}/${repository.name} appears to publish or run ${artifacts.package.name}.`
-    : `${repository.owner}/${repository.name} repository root.`;
+  const scopedLabel = scopedRepositoryLabel(repository, artifacts.scanScope);
+  const scopedPath = scopedRepositoryPath(artifacts.scanScope);
+  const scopedUrl = scopedRepositoryUrl(repository, artifacts.scanScope);
+  const repoPurpose = artifacts.scanScope?.treePath
+    ? `${scopedLabel} is the scanned GitHub tree path inside ${repository.owner}/${repository.name}.`
+    : artifacts.package.name
+      ? `${repository.owner}/${repository.name} appears to publish or run ${artifacts.package.name}.`
+      : `${repository.owner}/${repository.name} repository root.`;
 
   addNode(nodes, {
     id: repoNodeId,
-    label: `${repository.owner}/${repository.name}`,
+    label: scopedLabel,
     kind: "service",
-    domain: "Repository",
+    domain: artifacts.scanScope?.treePath ? "Scoped Repository" : "Repository",
     whatItIs: repoPurpose,
-    whyItExists: "Repository root for the scanned codebase.",
-    owns: [artifacts.package.name ?? repository.name],
+    whyItExists: artifacts.scanScope?.treePath
+      ? `Scoped scan rooted at ${artifacts.scanScope.treePath} from ${scopedUrl}.`
+      : "Repository root for the scanned codebase.",
+    owns: [artifacts.package.name ?? (artifacts.scanScope?.treePath ?? repository.name)],
     confidence: repoDocs.length > 0 || packageEvidence.length > 0 || directPackageNameEvidence.length > 0 ? "confirmed" : "inferred",
     risks: [],
-    path: ".",
+    path: scopedPath,
     repositoryId: repository.id,
     evidence: [...directPackageNameEvidence, ...repoDocs.slice(0, 3), ...packageEvidence.slice(0, 2)],
+  });
+
+  const hasServiceMesh = addServiceMeshFromConfig({
+    repository,
+    artifacts,
+    repoNodeId,
+    nodes,
+    links,
   });
 
   const sourceFindings = artifacts.findings.filter((finding) =>
     ["import", "http", "env", "api-route", "database", "queue"].includes(finding.kind),
   );
   const modules = new Map<string, Finding[]>();
-  for (const finding of sourceFindings) {
-    const moduleName = moduleNameForFile(finding.filePath);
-    modules.set(moduleName, [...(modules.get(moduleName) ?? []), finding]);
+  if (!hasServiceMesh) {
+    for (const finding of sourceFindings) {
+      const moduleName = moduleNameForFile(finding.filePath);
+      modules.set(moduleName, [...(modules.get(moduleName) ?? []), finding]);
+    }
   }
 
   for (const [moduleName, findings] of modules) {
@@ -256,7 +484,9 @@ export function buildGraphFromArtifacts(args: {
     });
   }
 
-  const importFindings = artifacts.findings.filter((finding) => finding.kind === "import");
+  const importFindings = hasServiceMesh
+    ? []
+    : artifacts.findings.filter((finding) => finding.kind === "import");
   for (const finding of importFindings) {
     const sourceModule = moduleNodeId(repository.id, moduleNameForFile(finding.filePath));
     const relativeModuleName = moduleNameForRelativeImport(finding.filePath, finding.value);
@@ -337,9 +567,11 @@ export function buildGraphFromArtifacts(args: {
 
   // Service-to-service edges: literal HTTP service URLs found in source turn
   // into external "service" nodes with an inbound call edge from the module.
-  const serviceFindings = artifacts.findings.filter(
-    (finding) => finding.kind === "http" && finding.detector === "service-url-reference",
-  );
+  const serviceFindings = hasServiceMesh
+    ? []
+    : artifacts.findings.filter(
+        (finding) => finding.kind === "http" && finding.detector === "service-url-reference",
+      );
   for (const finding of serviceFindings) {
     const host = finding.label;
     const sourceModule = moduleNodeId(repository.id, moduleNameForFile(finding.filePath));

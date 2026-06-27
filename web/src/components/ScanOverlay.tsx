@@ -45,7 +45,9 @@ export function ScanOverlay({ repo, scanId }: { repo: string; scanId: string }) 
 
         if (scan.status === "completed") {
           timeout = setTimeout(() => {
-            router.push(`/explore?scanId=${encodeURIComponent(scanId)}&repo=${encodeURIComponent(repo)}`);
+            router.push(
+              `/explore?scanId=${encodeURIComponent(scanId)}&view=detail&repo=${encodeURIComponent(repo)}`,
+            );
           }, 700);
           return;
         }

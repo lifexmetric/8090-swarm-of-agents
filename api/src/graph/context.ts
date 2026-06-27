@@ -1,4 +1,5 @@
-import type { Confidence, GraphData, GraphLink, GraphNode, HandoffContextMap, RepositoryRecord, ScanContext } from "../types/domain.js";
+import { scopedRepositoryLabel, scopedRepositoryUrl } from "../scanner/scope.js";
+import type { Confidence, GraphData, GraphLink, GraphNode, HandoffContextMap, RepositoryRecord, ScanContext, ScanScope } from "../types/domain.js";
 
 function evidenceList(items: GraphNode["evidence"] | GraphLink["evidence"]): string {
   if (!items || items.length === 0) {
@@ -219,13 +220,18 @@ export function buildScanContext(args: {
   graph: GraphData;
   commitSha: string;
   backboard?: ScanContext["backboard"];
+  scanScope?: ScanScope;
 }): ScanContext {
-  const { repository, graph, commitSha, backboard } = args;
-  const systemBrief = `# Atlas Scan Brief - ${repository.owner}/${repository.name}
+  const { repository, graph, commitSha, backboard, scanScope } = args;
+  const scopedLabel = scopedRepositoryLabel(repository, scanScope);
+  const scopedUrl = scopedRepositoryUrl(repository, scanScope);
+  const scopeLine = scanScope?.treePath
+    ? `\nScan scope: \`${scanScope.treePath}\` (GitHub tree URL)\n`
+    : "\n";
+  const systemBrief = `# Atlas Scan Brief - ${scopedLabel}
 
-Repository: ${repository.url}
-Commit: ${commitSha}
-
+Repository: ${scopedUrl}
+Commit: ${commitSha}${scopeLine}
 ## Graph
 - Nodes: ${graph.nodes.length}
 - Edges: ${graph.links.length}

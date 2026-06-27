@@ -14,6 +14,8 @@ import {
   Minus,
   MessageSquare,
   GitMerge,
+  Network,
+  GitBranch,
 } from "lucide-react";
 import {
   GRAPH,
@@ -29,7 +31,7 @@ import {
   type NodeKind,
 } from "@/lib/data";
 import { ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
-import { Graph3D, type Graph3DHandle } from "@/components/Graph3D";
+import { Graph3D, type Graph3DHandle, type LayoutMode } from "@/components/Graph3D";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
@@ -70,6 +72,7 @@ function ExplorePageContent() {
   const [activeKinds, setActiveKinds] = React.useState<Set<NodeKind>>(new Set(ALL_KINDS));
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
   const [criticalPathMode, setCriticalPathMode] = React.useState(false);
+  const [layoutMode, setLayoutMode] = React.useState<LayoutMode>("hierarchy");
   const [graphLoad, setGraphLoad] = React.useState<{
     key: string;
     graph: GraphData | null;
@@ -103,17 +106,13 @@ function ExplorePageContent() {
         }
 
         if (scanId) {
-          const scan = await getScan(scanId);
-          const workspaceGraph = await getWorkspaceGraph(scan.workspaceId);
+          const [scan, scanGraph] = await Promise.all([getScan(scanId), getScanGraph(scanId)]);
           if (cancelled) return;
-          const repoCount = workspaceGraph.repositories.length;
           setGraphLoad({
             key,
-            graph: workspaceGraph,
-            repoLabel: repoCount === 1
-              ? scan.repoUrl.replace(/^https:\/\/github\.com\//, "")
-              : `${repoCount} repos · workspace:${workspaceGraph.workspaceId}`,
-            apiNotice: null,
+            graph: scanGraph,
+            repoLabel: scan.repoUrl.replace(/^https:\/\/github\.com\//, ""),
+            apiNotice: scanGraph.nodes.length === 0 ? "Scan completed but no graph nodes were produced." : null,
           });
           return;
         }
@@ -337,6 +336,7 @@ function ExplorePageContent() {
           criticalPathMode={criticalPathMode}
           criticalPathNodeIds={criticalPathNodeIds}
           criticalPathLinkIds={criticalPathLinkIds}
+          layoutMode={layoutMode}
         />
       </div>
 
@@ -431,6 +431,37 @@ function ExplorePageContent() {
                 >
                   <Maximize2 className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Reset</span>
+                </button>
+              </div>
+              <div
+                className="hidden rounded-lg border border-line bg-surface sm:flex"
+                title="Switch graph layout"
+              >
+                <button
+                  onClick={() => setLayoutMode("hierarchy")}
+                  aria-label="Hierarchy layout"
+                  className={cn(
+                    "flex h-[29px] cursor-pointer items-center gap-1.5 border-r border-line px-2.5 text-[12px] transition-colors duration-150",
+                    layoutMode === "hierarchy"
+                      ? "bg-accent/10 text-accent"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <GitBranch className="h-3 w-3" />
+                  <span className="hidden md:inline">{graph.nodes.length > 35 ? "Bands" : "Hierarchy"}</span>
+                </button>
+                <button
+                  onClick={() => setLayoutMode("flow")}
+                  aria-label="Flow layout"
+                  className={cn(
+                    "flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[12px] transition-colors duration-150",
+                    layoutMode === "flow"
+                      ? "bg-accent/10 text-accent"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <Network className="h-3 w-3" />
+                  <span className="hidden md:inline">Flow</span>
                 </button>
               </div>
               <Link

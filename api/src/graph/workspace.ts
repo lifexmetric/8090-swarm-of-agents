@@ -5,12 +5,21 @@ function systemNodeId(repo: RepositoryRecord): string {
   return stableId("system", repo.id);
 }
 
-function repoRootNodeId(graph: GraphData, repo: RepositoryRecord): string | null {
-  return graph.nodes.find((node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`)?.id ?? null;
+function repoRootNode(graph: GraphData, repo: RepositoryRecord): GraphNode | undefined {
+  const exact = graph.nodes.find(
+    (node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`,
+  );
+  if (exact) return exact;
+  return graph.nodes.find(
+    (node) =>
+      node.repositoryId === repo.id &&
+      node.label.startsWith(`${repo.owner}/${repo.name}/`) &&
+      !node.label.slice(`${repo.owner}/${repo.name}/`.length).includes("/"),
+  );
 }
 
-function repoRootNode(graph: GraphData, repo: RepositoryRecord): GraphNode | undefined {
-  return graph.nodes.find((node) => node.repositoryId === repo.id && node.label === `${repo.owner}/${repo.name}`);
+function repoRootNodeId(graph: GraphData, repo: RepositoryRecord): string | null {
+  return repoRootNode(graph, repo)?.id ?? null;
 }
 
 function unique(values: string[]): string[] {
@@ -28,7 +37,7 @@ function systemNodeFromScan(repo: RepositoryRecord, scan: ScanRecord): GraphNode
 
   return {
     id: systemNodeId(repo),
-    label: `${repo.owner}/${repo.name}`,
+    label: root?.label ?? `${repo.owner}/${repo.name}`,
     kind: "service",
     domain: "System",
     whatItIs: root?.whatItIs ?? `${repo.owner}/${repo.name} is a scanned repository in this workspace.`,
@@ -36,7 +45,7 @@ function systemNodeFromScan(repo: RepositoryRecord, scan: ScanRecord): GraphNode
     owns,
     confidence: root?.confidence ?? "confirmed",
     risks,
-    path: ".",
+    path: root?.path ?? ".",
     repositoryId: repo.id,
     scanId: scan.id,
     evidence: root?.evidence ?? [],
