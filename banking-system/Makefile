@@ -79,13 +79,17 @@ demo-payment:
 
 # ── Break the SWIFT connection (for demo) ─────────────────────────────────
 break-swift:
-	@echo "Introducing breaking change: changing /v2/transfers to /v3/transfers in payments-service..."
+	@echo "Introducing breaking change: changing /v2/transfers to /v3/transfers..."
 	sed -i '' 's|/v2/transfers|/v3/transfers|g' payments-service/internal/swift/client.go
+	cd .. && git add banking-system/payments-service/internal/swift/client.go && \
+		git commit -m "feat(payments): upgrade SWIFT rail integration to v3 API" 2>/dev/null || true
 	docker compose up --build -d payments-service
-	@echo "Breaking change applied. Try 'make demo-payment' to see it fail."
+	@echo "Breaking change applied and committed. Run 'make demo-payment' to see it fail."
 
 fix-swift:
 	@echo "Reverting breaking change..."
 	sed -i '' 's|/v3/transfers|/v2/transfers|g' payments-service/internal/swift/client.go
+	cd .. && git add banking-system/payments-service/internal/swift/client.go && \
+		git commit -m "fix(payments): revert SWIFT rail endpoint to v2" 2>/dev/null || true
 	docker compose up --build -d payments-service
-	@echo "Fixed. Try 'make demo-payment' to verify."
+	@echo "Fixed. Run 'make demo-payment' to verify."

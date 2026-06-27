@@ -34,6 +34,13 @@ func CloseProducer() {
 	}
 }
 
+func IsHealthy() error {
+	if producer == nil {
+		return fmt.Errorf("producer not initialized")
+	}
+	return nil
+}
+
 func PublishEvent(topic string, key string, payload interface{}) error {
 	if producer == nil {
 		return fmt.Errorf("kafka producer not initialized")

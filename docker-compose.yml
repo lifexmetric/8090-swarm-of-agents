@@ -1,0 +1,33 @@
+services:
+  platform:
+    build: ./platform
+    ports:
+      - "3001:3001"
+    environment:
+      - PLATFORM_SECRET=${PLATFORM_SECRET:-dev-secret-change-in-production}
+      - REPO_ROOT=/repo
+    volumes:
+      - platform-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo:ro
+    restart: unless-stopped
+
+  scan-engine:
+    build: ./scan-engine
+    ports:
+      - "8010:8010"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    restart: unless-stopped
+
+  visualizer:
+    build: ./visualizer
+    ports:
+      - "5173:80"
+    depends_on:
+      - platform
+      - scan-engine
+    restart: unless-stopped
+
+volumes:
+  platform-data:

@@ -174,13 +174,16 @@ function makeProxy(target, options = {}) {
 
 app.use(morgan('combined'));
 
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+// Rate limit only the authenticated API proxy routes — not health/monitoring endpoints.
+// Health poller fires every 5s; dashboard auto-refreshes every 10s. Limiting those
+// would starve real API requests.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,   // 1 minute window
+  max: 120,              // 120 req/min per IP on protected routes
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-}));
+});
 
 // ── Health (unauthenticated) ─────────────────────────────────────────────────
 app.get('/health', (_req, res) =>
@@ -218,8 +221,8 @@ app.get('/api/health-summary', async (_req, res) => {
   res.json({ services, timestamp: new Date().toISOString() });
 });
 
-// ── JWT validation for all remaining /api/* routes ───────────────────────────
-app.use('/api', authMiddleware);
+// ── Rate limit + JWT validation for all remaining /api/* routes ──────────────
+app.use('/api', apiLimiter, authMiddleware);
 
 // ── Protected proxies ─────────────────────────────────────────────────────────
 app.use('/api/accounts',

@@ -43,6 +43,13 @@ func InitPool(ctx context.Context) error {
 func GetPool() *pgxpool.Pool { return pool }
 func ClosePool()              { if pool != nil { pool.Close() } }
 
+func Ping(ctx context.Context) error {
+	if pool == nil {
+		return fmt.Errorf("pool not initialized")
+	}
+	return pool.Ping(ctx)
+}
+
 func CreatePayment(ctx context.Context, p *model.Payment) error {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO payment_orders (id, source_account, destination_account, amount, currency, status, idempotency_key, created_at, updated_at)

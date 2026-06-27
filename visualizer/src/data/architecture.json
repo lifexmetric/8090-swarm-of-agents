@@ -1,0 +1,846 @@
+{
+  "$schema": "https://calm.finos.org/release/1.2/meta/calm.json",
+  "nodes": [
+    {
+      "unique-id": "bank-customer",
+      "node-type": "actor",
+      "name": "Bank Customer",
+      "description": "Retail banking customer who initiates payments, views accounts, and receives notifications"
+    },
+    {
+      "unique-id": "bank-mobile-app",
+      "node-type": "webclient",
+      "name": "Mobile Banking App",
+      "description": "iOS and Android React Native application used by customers to access banking services",
+      "development-language": "TypeScript",
+      "metadata": {
+        "technology": "React Native",
+        "repo": "bank-mobile-app"
+      }
+    },
+    {
+      "unique-id": "bank-web-app",
+      "node-type": "webclient",
+      "name": "Web Banking Portal",
+      "description": "React web application providing full banking functionality via browser",
+      "development-language": "TypeScript",
+      "metadata": {
+        "technology": "React",
+        "repo": "bank-web-app"
+      }
+    },
+    {
+      "unique-id": "api-gateway",
+      "node-type": "service",
+      "name": "API Gateway",
+      "description": "Single entry point for all client applications. Validates JWT tokens via auth-service, applies rate limiting, and proxies requests to downstream services by path prefix",
+      "development-language": "JavaScript",
+      "interfaces": [
+        {
+          "unique-id": "api-gateway-http",
+          "type": "port-interface",
+          "port": 3000
+        }
+      ],
+      "metadata": {
+        "technology": "Node.js 20 + Express + Nginx",
+        "repo": "bank-api-gateway",
+        "criticality": "high"
+      }
+    },
+    {
+      "unique-id": "auth-service",
+      "node-type": "service",
+      "name": "Auth Service",
+      "description": "Handles user authentication and JWT lifecycle. Issues access tokens (30min) and refresh tokens (7d). Sessions stored in Redis for fast invalidation",
+      "development-language": "Python",
+      "interfaces": [
+        {
+          "unique-id": "auth-service-http",
+          "type": "port-interface",
+          "port": 8001
+        }
+      ],
+      "metadata": {
+        "technology": "Python 3.12 + FastAPI + asyncpg + redis",
+        "repo": "auth-service",
+        "endpoints": [
+          "POST /auth/login",
+          "POST /auth/refresh",
+          "POST /auth/logout",
+          "GET /auth/verify"
+        ]
+      }
+    },
+    {
+      "unique-id": "accounts-service",
+      "node-type": "service",
+      "name": "Accounts Service",
+      "description": "Manages bank accounts, balances, and transaction ledger. Publishes account.updated events to Kafka on every balance change",
+      "development-language": "Java",
+      "interfaces": [
+        {
+          "unique-id": "accounts-service-http",
+          "type": "port-interface",
+          "port": 8002
+        }
+      ],
+      "metadata": {
+        "technology": "Java 21 + Spring Boot 3 + Spring Data JPA + Spring Kafka",
+        "repo": "accounts-service",
+        "endpoints": [
+          "GET /accounts/{id}",
+          "GET /accounts/{id}/balance",
+          "POST /accounts",
+          "POST /accounts/{id}/transactions"
+        ]
+      }
+    },
+    {
+      "unique-id": "payments-service",
+      "node-type": "service",
+      "name": "Payments Service",
+      "description": "Initiates and tracks payment transactions. Calls the SWIFT/ACH rail synchronously (critical path — no circuit breaker). Publishes payment lifecycle events to Kafka",
+      "development-language": "Go",
+      "interfaces": [
+        {
+          "unique-id": "payments-service-http",
+          "type": "port-interface",
+          "port": 8003
+        }
+      ],
+      "metadata": {
+        "technology": "Go 1.23 + Gin + pgx + Sarama",
+        "repo": "payments-service",
+        "risk": "HIGH — synchronous external call to swift-ach-rail with no fallback. Latency spikes propagate directly to user-facing payment flow.",
+        "endpoints": [
+          "POST /payments",
+          "GET /payments/{id}",
+          "GET /health"
+        ]
+      }
+    },
+    {
+      "unique-id": "fraud-detection-service",
+      "node-type": "service",
+      "name": "Fraud Detection Service",
+      "description": "Consumes payment.initiated events from Kafka and runs real-time fraud scoring using graph queries on Neo4j. Detects circular transactions, velocity anomalies, and new-payee risks. Publishes fraud.alert events when score exceeds threshold",
+      "development-language": "Python",
+      "interfaces": [
+        {
+          "unique-id": "fraud-service-http",
+          "type": "port-interface",
+          "port": 8004
+        }
+      ],
+      "metadata": {
+        "technology": "Python 3.12 + FastAPI + kafka-python + neo4j driver",
+        "repo": "fraud-detection-service"
+      }
+    },
+    {
+      "unique-id": "customer-service",
+      "node-type": "service",
+      "name": "Customer Service",
+      "description": "Manages customer profiles, KYC documents, and identity records. Stores unstructured profile data in MongoDB. Fetches linked accounts from accounts-service",
+      "development-language": "JavaScript",
+      "interfaces": [
+        {
+          "unique-id": "customer-service-http",
+          "type": "port-interface",
+          "port": 8005
+        }
+      ],
+      "metadata": {
+        "technology": "Node.js 20 + Express + Mongoose",
+        "repo": "customer-service",
+        "endpoints": [
+          "GET /customers/:id",
+          "POST /customers",
+          "PUT /customers/:id/kyc",
+          "GET /customers/:id/accounts"
+        ]
+      }
+    },
+    {
+      "unique-id": "notification-service",
+      "node-type": "service",
+      "name": "Notification Service",
+      "description": "Background Kafka consumer that dispatches email and SMS notifications based on domain events. Routes payment.completed to SendGrid, fraud.alert to Twilio SMS, account.updated to email digest",
+      "development-language": "Python",
+      "metadata": {
+        "technology": "Python 3.12 + kafka-python + SendGrid SDK + Twilio SDK",
+        "repo": "notification-service",
+        "note": "No inbound HTTP — pure event-driven consumer"
+      }
+    },
+    {
+      "unique-id": "reporting-service",
+      "node-type": "service",
+      "name": "Reporting Service",
+      "description": "GraphQL API for analytics and audit reporting. Aggregates data across PostgreSQL (transactions, balances) and MongoDB (customer profiles)",
+      "development-language": "Python",
+      "interfaces": [
+        {
+          "unique-id": "reporting-service-http",
+          "type": "port-interface",
+          "port": 8007
+        }
+      ],
+      "metadata": {
+        "technology": "Python 3.12 + FastAPI + Strawberry GraphQL + asyncpg + motor",
+        "repo": "reporting-service",
+        "endpoints": [
+          "POST /graphql"
+        ]
+      }
+    },
+    {
+      "unique-id": "postgres-auth-db",
+      "node-type": "database",
+      "name": "Auth PostgreSQL",
+      "description": "PostgreSQL database storing user credentials (bcrypt hashed), audit login log, and account lock state",
+      "interfaces": [
+        {
+          "unique-id": "postgres-auth-port",
+          "type": "port-interface",
+          "port": 5432
+        }
+      ],
+      "metadata": {
+        "technology": "PostgreSQL 16",
+        "tables": ["users", "login_audit"]
+      }
+    },
+    {
+      "unique-id": "postgres-accounts-db",
+      "node-type": "database",
+      "name": "Bank PostgreSQL",
+      "description": "PostgreSQL database storing accounts, transaction ledger, and payment orders. Shared between accounts-service and payments-service via separate schemas",
+      "interfaces": [
+        {
+          "unique-id": "postgres-bank-port",
+          "type": "port-interface",
+          "port": 5433
+        }
+      ],
+      "metadata": {
+        "technology": "PostgreSQL 16",
+        "schemas": ["accounts", "payments"],
+        "tables": ["accounts", "transactions", "payment_orders"]
+      }
+    },
+    {
+      "unique-id": "postgres-payments-db",
+      "node-type": "database",
+      "name": "Payments Schema (Bank PostgreSQL)",
+      "description": "The payments schema within the shared Bank PostgreSQL instance. Logically separate but physically co-located with accounts schema",
+      "interfaces": [
+        {
+          "unique-id": "postgres-payments-port",
+          "type": "port-interface",
+          "port": 5433
+        }
+      ],
+      "metadata": {
+        "technology": "PostgreSQL 16",
+        "note": "Same physical DB as postgres-accounts-db; separated by schema"
+      }
+    },
+    {
+      "unique-id": "redis-session-cache",
+      "node-type": "database",
+      "name": "Redis Session Cache",
+      "description": "In-memory store for JWT refresh tokens and session state. Used by auth-service for fast token validation and invalidation",
+      "interfaces": [
+        {
+          "unique-id": "redis-port",
+          "type": "port-interface",
+          "port": 6379
+        }
+      ],
+      "metadata": {
+        "technology": "Redis 7"
+      }
+    },
+    {
+      "unique-id": "mongodb-customers",
+      "node-type": "database",
+      "name": "Customer MongoDB",
+      "description": "Document store for customer profiles, KYC documents, and identity metadata. Schema-flexible to accommodate varying KYC requirements across jurisdictions",
+      "interfaces": [
+        {
+          "unique-id": "mongodb-port",
+          "type": "port-interface",
+          "port": 27017
+        }
+      ],
+      "metadata": {
+        "technology": "MongoDB 7",
+        "collections": ["customers", "kyc_documents"]
+      }
+    },
+    {
+      "unique-id": "neo4j-fraud-graph",
+      "node-type": "database",
+      "name": "Neo4j Fraud Graph",
+      "description": "Graph database storing entity relationships for fraud detection. Nodes are accounts, devices, and IP addresses. Edges represent transactions, logins, and shared attributes. Cypher queries detect circular payment rings, velocity anomalies, and shared-device patterns",
+      "interfaces": [
+        {
+          "unique-id": "neo4j-bolt-port",
+          "type": "port-interface",
+          "port": 7687
+        },
+        {
+          "unique-id": "neo4j-http-port",
+          "type": "port-interface",
+          "port": 7474
+        }
+      ],
+      "metadata": {
+        "technology": "Neo4j 5",
+        "node-labels": ["Account", "Device", "IPAddress", "Customer"],
+        "relationship-types": ["SENT_TO", "LOGGED_IN_FROM", "SHARED_DEVICE", "OWNS"]
+      }
+    },
+    {
+      "unique-id": "kafka-cluster",
+      "node-type": "system",
+      "name": "Apache Kafka",
+      "description": "Event streaming backbone. All async communication between services flows through Kafka topics. Topics: payment.initiated, payment.completed, payment.failed, fraud.alert, account.updated",
+      "interfaces": [
+        {
+          "unique-id": "kafka-broker-port",
+          "type": "port-interface",
+          "port": 9092
+        }
+      ],
+      "metadata": {
+        "technology": "Apache Kafka 3.7 + Confluent",
+        "topics": [
+          "payment.initiated",
+          "payment.completed",
+          "payment.failed",
+          "fraud.alert",
+          "account.updated"
+        ]
+      }
+    },
+    {
+      "unique-id": "k8s-cluster",
+      "node-type": "network",
+      "name": "Azure Kubernetes Service (AKS)",
+      "description": "Production AKS cluster hosting all banking microservices in the banking-system namespace. Network policies restrict service-to-service traffic by label selector",
+      "metadata": {
+        "technology": "AKS (Azure Kubernetes Service)",
+        "namespace": "banking-system",
+        "region": "canadacentral"
+      }
+    },
+    {
+      "unique-id": "swift-ach-rail",
+      "node-type": "ecosystem",
+      "name": "SWIFT/ACH Payment Rail",
+      "description": "External payment rail for initiating ACH and SWIFT wire transfers. Called synchronously by payments-service on the critical payment path. Mocked locally at port 9999",
+      "interfaces": [
+        {
+          "unique-id": "swift-rail-api",
+          "type": "api"
+        }
+      ],
+      "metadata": {
+        "contract": "POST /v2/transfers — { amount, currency, source_account, destination_account, idempotency_key }",
+        "risk": "HIGH — external dependency, no circuit breaker, failures propagate to user as 500",
+        "local-mock": "http://localhost:9999"
+      }
+    },
+    {
+      "unique-id": "sendgrid",
+      "node-type": "ecosystem",
+      "name": "SendGrid",
+      "description": "Transactional email provider. Used by notification-service to dispatch payment confirmations and account alerts",
+      "metadata": {
+        "technology": "SendGrid Email API v3",
+        "mocked-in-dev": true
+      }
+    },
+    {
+      "unique-id": "twilio",
+      "node-type": "ecosystem",
+      "name": "Twilio",
+      "description": "SMS provider. Used by notification-service to send fraud alerts and OTP verification codes",
+      "metadata": {
+        "technology": "Twilio Messaging API",
+        "mocked-in-dev": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "unique-id": "customer-uses-mobile",
+      "description": "Bank customer accesses services via mobile banking app",
+      "relationship-type": {
+        "interacts": {
+          "actor": "bank-customer",
+          "nodes": ["bank-mobile-app", "bank-web-app"]
+        }
+      }
+    },
+    {
+      "unique-id": "mobile-to-gateway",
+      "description": "Mobile app connects to API gateway over HTTPS",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "bank-mobile-app" },
+          "destination": { "node": "api-gateway", "interfaces": ["api-gateway-http"] }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "web-to-gateway",
+      "description": "Web app connects to API gateway over HTTPS",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "bank-web-app" },
+          "destination": { "node": "api-gateway", "interfaces": ["api-gateway-http"] }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "gateway-to-auth",
+      "description": "API gateway proxies /api/auth/* requests to auth-service and calls /auth/verify to validate every inbound JWT",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "api-gateway" },
+          "destination": { "node": "auth-service", "interfaces": ["auth-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "gateway-to-accounts",
+      "description": "API gateway proxies /api/accounts/* requests to accounts-service",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "api-gateway" },
+          "destination": { "node": "accounts-service", "interfaces": ["accounts-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "gateway-to-payments",
+      "description": "API gateway proxies /api/payments/* requests to payments-service",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "api-gateway" },
+          "destination": { "node": "payments-service", "interfaces": ["payments-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "gateway-to-customer",
+      "description": "API gateway proxies /api/customers/* requests to customer-service",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "api-gateway" },
+          "destination": { "node": "customer-service", "interfaces": ["customer-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "gateway-to-reporting",
+      "description": "API gateway proxies /api/reports/* requests to reporting-service",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "api-gateway" },
+          "destination": { "node": "reporting-service", "interfaces": ["reporting-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "auth-to-postgres",
+      "description": "Auth service reads and writes user credentials and audit log to PostgreSQL",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "auth-service" },
+          "destination": { "node": "postgres-auth-db", "interfaces": ["postgres-auth-port"] }
+        }
+      },
+      "protocol": "JDBC"
+    },
+    {
+      "unique-id": "auth-to-redis",
+      "description": "Auth service stores JWT refresh tokens and session state in Redis for fast validation and invalidation",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "auth-service" },
+          "destination": { "node": "redis-session-cache", "interfaces": ["redis-port"] }
+        }
+      },
+      "protocol": "TCP"
+    },
+    {
+      "unique-id": "accounts-to-postgres",
+      "description": "Accounts service reads and writes account balances and transaction ledger to PostgreSQL",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "accounts-service" },
+          "destination": { "node": "postgres-accounts-db", "interfaces": ["postgres-bank-port"] }
+        }
+      },
+      "protocol": "JDBC"
+    },
+    {
+      "unique-id": "accounts-to-kafka",
+      "description": "Accounts service publishes account.updated events to Kafka after every balance change",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "accounts-service" },
+          "destination": { "node": "kafka-cluster", "interfaces": ["kafka-broker-port"] }
+        }
+      },
+      "protocol": "AMQP",
+      "metadata": {
+        "topics-produced": ["account.updated"]
+      }
+    },
+    {
+      "unique-id": "payments-to-postgres",
+      "description": "Payments service writes payment orders and status updates to PostgreSQL",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "payments-service" },
+          "destination": { "node": "postgres-payments-db", "interfaces": ["postgres-payments-port"] }
+        }
+      },
+      "protocol": "JDBC"
+    },
+    {
+      "unique-id": "payments-to-kafka",
+      "description": "Payments service publishes payment lifecycle events (initiated, completed, failed) to Kafka",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "payments-service" },
+          "destination": { "node": "kafka-cluster", "interfaces": ["kafka-broker-port"] }
+        }
+      },
+      "protocol": "AMQP",
+      "metadata": {
+        "topics-produced": ["payment.initiated", "payment.completed", "payment.failed"]
+      }
+    },
+    {
+      "unique-id": "payments-to-swift",
+      "description": "Payments service calls the SWIFT/ACH rail synchronously to initiate external transfers. This is on the critical payment path with no circuit breaker — failures are propagated directly to the caller as 500 errors",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "payments-service" },
+          "destination": { "node": "swift-ach-rail", "interfaces": ["swift-rail-api"] }
+        }
+      },
+      "protocol": "HTTPS",
+      "metadata": {
+        "criticality": "CRITICAL",
+        "failure-mode": "hard-fail — no retry at this layer, no circuit breaker",
+        "contract": "POST /v2/transfers",
+        "breaking-change-risk": "HIGH — idempotency_key must be unique per retry; path version changes break all payments"
+      }
+    },
+    {
+      "unique-id": "fraud-to-kafka",
+      "description": "Fraud detection service consumes payment.initiated from Kafka and publishes fraud.alert when score exceeds threshold",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "fraud-detection-service" },
+          "destination": { "node": "kafka-cluster", "interfaces": ["kafka-broker-port"] }
+        }
+      },
+      "protocol": "AMQP",
+      "metadata": {
+        "topics-consumed": ["payment.initiated"],
+        "topics-produced": ["fraud.alert"]
+      }
+    },
+    {
+      "unique-id": "fraud-to-neo4j",
+      "description": "Fraud detection service queries Neo4j via Bolt protocol to run graph pattern detection (circular transactions, shared devices, velocity checks)",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "fraud-detection-service" },
+          "destination": { "node": "neo4j-fraud-graph", "interfaces": ["neo4j-bolt-port"] }
+        }
+      },
+      "protocol": "TCP"
+    },
+    {
+      "unique-id": "customer-to-mongodb",
+      "description": "Customer service reads and writes customer profiles and KYC documents to MongoDB",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "customer-service" },
+          "destination": { "node": "mongodb-customers", "interfaces": ["mongodb-port"] }
+        }
+      },
+      "protocol": "TCP"
+    },
+    {
+      "unique-id": "customer-to-accounts",
+      "description": "Customer service fetches linked account IDs from accounts-service via synchronous HTTP call",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "customer-service" },
+          "destination": { "node": "accounts-service", "interfaces": ["accounts-service-http"] }
+        }
+      },
+      "protocol": "HTTP"
+    },
+    {
+      "unique-id": "notification-to-kafka",
+      "description": "Notification service consumes multiple Kafka topics to trigger email and SMS dispatches",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "notification-service" },
+          "destination": { "node": "kafka-cluster", "interfaces": ["kafka-broker-port"] }
+        }
+      },
+      "protocol": "AMQP",
+      "metadata": {
+        "topics-consumed": ["payment.completed", "fraud.alert", "account.updated"]
+      }
+    },
+    {
+      "unique-id": "notification-to-sendgrid",
+      "description": "Notification service calls SendGrid API to send transactional emails (payment confirmations, account alerts)",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "notification-service" },
+          "destination": { "node": "sendgrid" }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "notification-to-twilio",
+      "description": "Notification service calls Twilio to send SMS alerts for fraud events and OTP codes",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "notification-service" },
+          "destination": { "node": "twilio" }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "reporting-to-postgres",
+      "description": "Reporting service queries PostgreSQL for transaction history and account balances to generate reports",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "reporting-service" },
+          "destination": { "node": "postgres-accounts-db", "interfaces": ["postgres-bank-port"] }
+        }
+      },
+      "protocol": "JDBC"
+    },
+    {
+      "unique-id": "reporting-to-mongodb",
+      "description": "Reporting service queries MongoDB for customer profile data to enrich reports",
+      "relationship-type": {
+        "connects": {
+          "source": { "node": "reporting-service" },
+          "destination": { "node": "mongodb-customers", "interfaces": ["mongodb-port"] }
+        }
+      },
+      "protocol": "TCP"
+    },
+    {
+      "unique-id": "all-services-in-k8s",
+      "description": "All application services are deployed in the AKS cluster under the banking-system namespace",
+      "relationship-type": {
+        "deployed-in": {
+          "container": "k8s-cluster",
+          "nodes": [
+            "api-gateway",
+            "auth-service",
+            "accounts-service",
+            "payments-service",
+            "fraud-detection-service",
+            "customer-service",
+            "notification-service",
+            "reporting-service"
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "infra-in-k8s",
+      "description": "Infrastructure components (databases, Kafka, Redis) run as StatefulSets in the same AKS cluster",
+      "relationship-type": {
+        "deployed-in": {
+          "container": "k8s-cluster",
+          "nodes": [
+            "postgres-auth-db",
+            "postgres-accounts-db",
+            "postgres-payments-db",
+            "redis-session-cache",
+            "mongodb-customers",
+            "neo4j-fraud-graph",
+            "kafka-cluster"
+          ]
+        }
+      }
+    }
+  ],
+  "flows": [
+    {
+      "unique-id": "flow-customer-login",
+      "name": "Customer Login",
+      "description": "Customer authenticates via mobile/web app, receives JWT access and refresh tokens",
+      "transitions": [
+        {
+          "relationship-unique-id": "customer-uses-mobile",
+          "sequence-number": 1,
+          "description": "Customer opens app and enters credentials"
+        },
+        {
+          "relationship-unique-id": "mobile-to-gateway",
+          "sequence-number": 2,
+          "description": "App sends POST /api/auth/login to API gateway"
+        },
+        {
+          "relationship-unique-id": "gateway-to-auth",
+          "sequence-number": 3,
+          "description": "Gateway proxies to auth-service POST /auth/login"
+        },
+        {
+          "relationship-unique-id": "auth-to-postgres",
+          "sequence-number": 4,
+          "description": "Auth service validates credentials against PostgreSQL users table"
+        },
+        {
+          "relationship-unique-id": "auth-to-redis",
+          "sequence-number": 5,
+          "description": "Auth service stores refresh token in Redis with TTL"
+        }
+      ]
+    },
+    {
+      "unique-id": "flow-payment-initiation",
+      "name": "Payment Initiation",
+      "description": "Customer initiates a payment — the critical path that touches payments-service and the external SWIFT rail",
+      "transitions": [
+        {
+          "relationship-unique-id": "mobile-to-gateway",
+          "sequence-number": 1,
+          "description": "Customer submits POST /api/payments from mobile app"
+        },
+        {
+          "relationship-unique-id": "gateway-to-auth",
+          "sequence-number": 2,
+          "description": "Gateway validates JWT via GET /auth/verify"
+        },
+        {
+          "relationship-unique-id": "gateway-to-payments",
+          "sequence-number": 3,
+          "description": "Gateway proxies to payments-service POST /payments"
+        },
+        {
+          "relationship-unique-id": "payments-to-postgres",
+          "sequence-number": 4,
+          "description": "Payments service writes payment_order with status=pending"
+        },
+        {
+          "relationship-unique-id": "payments-to-kafka",
+          "sequence-number": 5,
+          "description": "Payments service publishes payment.initiated event to Kafka"
+        },
+        {
+          "relationship-unique-id": "payments-to-swift",
+          "sequence-number": 6,
+          "description": "Payments service calls SWIFT/ACH rail POST /v2/transfers (synchronous, blocking)"
+        },
+        {
+          "relationship-unique-id": "payments-to-kafka",
+          "sequence-number": 7,
+          "description": "On SWIFT success: payments service publishes payment.completed; on failure: payment.failed"
+        }
+      ]
+    },
+    {
+      "unique-id": "flow-fraud-detection",
+      "name": "Real-Time Fraud Detection",
+      "description": "Triggered asynchronously by payment.initiated event — fraud score is computed and alert raised if above threshold",
+      "transitions": [
+        {
+          "relationship-unique-id": "fraud-to-kafka",
+          "sequence-number": 1,
+          "description": "Fraud service consumes payment.initiated from Kafka"
+        },
+        {
+          "relationship-unique-id": "fraud-to-neo4j",
+          "sequence-number": 2,
+          "description": "Fraud service runs Cypher queries against Neo4j graph to detect patterns"
+        },
+        {
+          "relationship-unique-id": "fraud-to-kafka",
+          "sequence-number": 3,
+          "description": "If fraud score > threshold, publishes fraud.alert to Kafka"
+        }
+      ]
+    },
+    {
+      "unique-id": "flow-notification-dispatch",
+      "name": "Payment Confirmation Notification",
+      "description": "After payment completes, notification-service sends confirmation email to customer",
+      "transitions": [
+        {
+          "relationship-unique-id": "notification-to-kafka",
+          "sequence-number": 1,
+          "description": "Notification service consumes payment.completed from Kafka"
+        },
+        {
+          "relationship-unique-id": "notification-to-sendgrid",
+          "sequence-number": 2,
+          "description": "Notification service calls SendGrid to dispatch confirmation email"
+        }
+      ]
+    },
+    {
+      "unique-id": "flow-account-summary",
+      "name": "Account Summary",
+      "description": "Customer views account balance and recent transactions via web portal",
+      "transitions": [
+        {
+          "relationship-unique-id": "web-to-gateway",
+          "sequence-number": 1,
+          "description": "Web app sends GET /api/accounts/{id}/balance"
+        },
+        {
+          "relationship-unique-id": "gateway-to-auth",
+          "sequence-number": 2,
+          "description": "Gateway validates JWT"
+        },
+        {
+          "relationship-unique-id": "gateway-to-accounts",
+          "sequence-number": 3,
+          "description": "Gateway proxies to accounts-service"
+        },
+        {
+          "relationship-unique-id": "accounts-to-postgres",
+          "sequence-number": 4,
+          "description": "Accounts service queries PostgreSQL for balance and recent transactions"
+        }
+      ]
+    }
+  ],
+  "adrs": [
+    "docs/adr/001-synchronous-swift-integration.md",
+    "docs/adr/002-neo4j-for-fraud-graph.md",
+    "docs/adr/003-kafka-event-backbone.md"
+  ]
+}

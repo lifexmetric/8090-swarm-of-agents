@@ -59,11 +59,36 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "service": "payments-service"})
 	})
 	r.GET("/readiness", func(c *gin.Context) {
+		ctx := c.Request.Context()
+		checks := map[string]string{}
+		degraded := false
+
+		if err := db.Ping(ctx); err != nil {
+			checks["postgres"] = err.Error()
+			degraded = true
+		} else {
+			checks["postgres"] = "ok"
+		}
+
+		if err := kafka.IsHealthy(); err != nil {
+			checks["kafka"] = err.Error()
+			degraded = true
+		} else {
+			checks["kafka"] = "ok"
+		}
+
 		if err := swift.CheckConnectivity(); err != nil {
-			c.JSON(503, gin.H{"status": "degraded", "error": err.Error()})
+			checks["swift"] = err.Error()
+			degraded = true
+		} else {
+			checks["swift"] = "ok"
+		}
+
+		if degraded {
+			c.JSON(503, gin.H{"status": "degraded", "checks": checks})
 			return
 		}
-		c.JSON(200, gin.H{"status": "ready"})
+		c.JSON(200, gin.H{"status": "ready", "checks": checks})
 	})
 	r.POST("/payments", h.InitiatePayment)
 	r.GET("/payments/:id", h.GetPayment)
