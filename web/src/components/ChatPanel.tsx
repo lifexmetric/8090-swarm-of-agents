@@ -3,7 +3,7 @@
 import * as React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AlertTriangle, Bot, Loader2, Send, User, X } from "lucide-react";
+import { AlertTriangle, Bot, ClipboardList, Loader2, Send, User, X } from "lucide-react";
 import {
   createChatSession,
   sendChatMessage,
@@ -12,6 +12,7 @@ import {
   type ChatSession,
 } from "@/lib/api";
 import type { GraphLink, GraphNode } from "@/lib/data";
+import { getHandoffScenarios } from "@/lib/handoff-scenarios";
 import { ConfidenceBadge, SectionLabel, cn } from "./ui";
 
 const QUICK_PROMPTS = [
@@ -152,6 +153,11 @@ export function ChatPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, pending, open]);
 
+  const handoffScenarios = React.useMemo(
+    () => getHandoffScenarios(selectedNode, selectedLink),
+    [selectedNode, selectedLink],
+  );
+
   async function ensureSession(): Promise<ChatSession> {
     if (session) return session;
     const created = await createChatSession({
@@ -238,20 +244,52 @@ export function ChatPanel({
 
       <div ref={scrollRef} className="scroll-thin flex-1 space-y-4 overflow-y-auto p-3">
         {messages.length === 0 && !error && (
-          <div className="space-y-2">
-            <SectionLabel>Takeover questions</SectionLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {[...(selectedPrompt ? [selectedPrompt] : []), ...QUICK_PROMPTS].map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  data-testid="quick-prompt"
-                  onClick={() => void submit(prompt)}
-                  className="cursor-pointer border border-[#2a2a2a] bg-[#0a0a0a] px-2.5 py-1.5 text-[12px] text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
-                >
-                  {prompt}
-                </button>
-              ))}
+          <div className="space-y-4">
+            <div>
+              <SectionLabel>Demo handoff cases</SectionLabel>
+              <div className="grid gap-1.5">
+                {handoffScenarios.map((scenario) => (
+                  <button
+                    key={scenario.id}
+                    type="button"
+                    data-testid="handoff-scenario"
+                    onClick={() => void submit(scenario.prompt)}
+                    className="group cursor-pointer border border-[#2a2a2a] bg-[#0a0a0a] px-2.5 py-2 text-left transition-colors duration-150 hover:border-[#3a3a3a] hover:bg-[#111]"
+                  >
+                    <span className="flex min-w-0 items-start gap-2">
+                      <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#3b82f6]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] font-semibold text-[#ededed]">
+                          {scenario.title}
+                        </span>
+                        <span className="mt-1 block text-[11px] leading-snug text-[#888]">
+                          {scenario.summary}
+                        </span>
+                        <span className="mt-1 block truncate font-mono text-[10px] text-[#555]">
+                          {scenario.anchor}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>Takeover questions</SectionLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {[...(selectedPrompt ? [selectedPrompt] : []), ...QUICK_PROMPTS].map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    data-testid="quick-prompt"
+                    onClick={() => void submit(prompt)}
+                    className="cursor-pointer border border-[#2a2a2a] bg-[#0a0a0a] px-2.5 py-1.5 text-[12px] text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
