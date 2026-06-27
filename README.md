@@ -65,6 +65,12 @@ GitHub repositories, runs deterministic JS/TS scanners, sends compact scan
 artifacts to Backboard, stores Backboard assistant/thread metadata, and
 persists evidence-backed graph data in SQLite.
 
+Atlas is also intended to support new-developer and AI-agent handoff from
+unfinished Git PRs. Scan context therefore includes a handoff map that links
+evidence file paths and line ranges back to graph nodes and edges. Future PR
+diff tooling can use this map to explain which architectural facts a changed
+file is likely to touch, while preserving evidence and confidence.
+
 ```bash
 cp .env.example .env
 # Fill BACKBOARD_API_KEY in .env. Do not commit .env.
@@ -89,7 +95,15 @@ The default API URL is `http://127.0.0.1:3001`. SQLite is stored at
 - `GET /api/nodes/:nodeId`
 - `GET /api/edges/:edgeId`
 - `GET /api/scans/:scanId/context`
+- `GET /api/scans/:scanId/handoff`
 - `GET /api/scans/:scanId/export`
+
+The export package includes:
+
+- `system-brief.md`
+- `node-context/*.md`
+- `link-context/*.md`
+- `handoff/handoff-map.json`
 
 ### Verification
 

@@ -187,12 +187,43 @@ export interface ScanContext {
   systemBrief: string;
   nodeContext: Array<{ nodeId: string; path: string; markdown: string }>;
   edgeContext: Array<{ edgeId: string; path: string; markdown: string }>;
+  handoff: HandoffContextMap;
   backboard?: {
     assistantId?: string | null;
     threadId?: string | null;
     runId?: string | null;
     memoryMode?: string | null;
   };
+}
+
+export interface HandoffContextMap {
+  purpose: string;
+  repositoryId: string;
+  commitSha: string;
+  files: Array<{
+    filePath: string;
+    nodes: Array<{
+      nodeId: string;
+      label: string;
+      kind: NodeKind;
+      confidence: Confidence;
+      lineStart: number;
+      lineEnd: number;
+      detector: string;
+      confidenceReason: string;
+    }>;
+    edges: Array<{
+      edgeId: string;
+      source: string;
+      target: string;
+      kind: EdgeKind;
+      confidence: Confidence;
+      lineStart: number;
+      lineEnd: number;
+      detector: string;
+      confidenceReason: string;
+    }>;
+  }>;
 }
 
 export interface WorkspaceGraph extends GraphData {

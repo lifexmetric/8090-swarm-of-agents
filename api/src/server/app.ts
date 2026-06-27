@@ -35,6 +35,7 @@ function contextFiles(context: ScanContext) {
     { path: "system-brief.md", markdown: context.systemBrief },
     ...context.nodeContext.map((file) => ({ path: file.path, markdown: file.markdown })),
     ...context.edgeContext.map((file) => ({ path: file.path, markdown: file.markdown })),
+    { path: "handoff/handoff-map.json", markdown: JSON.stringify(context.handoff, null, 2) },
   ];
 }
 
@@ -135,6 +136,14 @@ export async function buildApp(args: {
     if (!scan) return reply.status(404).send({ error: "Not Found", message: "Scan not found" });
     if (!scan.context) return reply.status(409).send({ error: "Conflict", message: `Scan is ${scan.status}` });
     return scan.context;
+  });
+
+  app.get("/api/scans/:scanId/handoff", async (request, reply) => {
+    const { scanId } = paramsSchema.parse(request.params);
+    const scan = args.repository.getScan(scanId);
+    if (!scan) return reply.status(404).send({ error: "Not Found", message: "Scan not found" });
+    if (!scan.context) return reply.status(409).send({ error: "Conflict", message: `Scan is ${scan.status}` });
+    return scan.context.handoff;
   });
 
   app.get("/api/scans/:scanId/export", async (request, reply) => {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { AtlasRepository, migrate, openDatabase, type SqliteDatabase } from "../src/db/database.js";
 import { buildWorkspaceGraph } from "../src/graph/workspace.js";
-import { buildScanContext } from "../src/graph/context.js";
+import { buildHandoffMap, buildScanContext } from "../src/graph/context.js";
 import { buildGraphFromArtifacts } from "../src/graph/normalize.js";
 import { parseGitHubRepo, repoUrlSchema } from "../src/github/url.js";
 import { scanRepository } from "../src/scanner/scanner.js";
@@ -91,6 +91,23 @@ describe("graph normalization", () => {
     expect(graph.links.every((link) => (link.evidence?.length ?? 0) > 0)).toBe(true);
     expect(graph.nodes.some((node) => node.kind === "database")).toBe(true);
     expect(graph.nodes.some((node) => node.kind === "queue")).toBe(true);
+  });
+
+  it("builds a handoff map from evidence files to graph nodes and edges", async () => {
+    const artifacts = await scanRepository(fixtureRoot, { maxFiles: 100, maxFileBytes: 100_000 });
+    const repository = repoRecord();
+    const graph = buildGraphFromArtifacts({
+      repository,
+      commitSha: "abc1234",
+      artifacts,
+      backboard: fakeBackboard(),
+    });
+    const handoff = buildHandoffMap({ repository, graph, commitSha: "abc1234" });
+
+    expect(handoff.files.length).toBeGreaterThan(0);
+    expect(handoff.files.some((file) => file.filePath === "src/server.ts")).toBe(true);
+    expect(handoff.files.flatMap((file) => file.nodes).every((node) => node.confidence && node.detector)).toBe(true);
+    expect(handoff.files.flatMap((file) => file.edges).every((edge) => edge.confidence && edge.detector)).toBe(true);
   });
 });
 
@@ -239,6 +256,58 @@ describe("API route schemas", () => {
     });
 
     expect(response.statusCode).toBe(400);
+    await app.close();
+    db.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns the handoff map for completed scans", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-api-"));
+    const db = openDatabase(path.join(tempDir, "atlas.db"));
+    migrate(db);
+    const repository = new AtlasRepository(db);
+    repository.ensureWorkspace("test");
+    const repo = repository.upsertRepository({
+      id: "repo_fixture",
+      workspaceId: "test",
+      owner: "atlas",
+      name: "sample-service",
+      url: "https://github.com/atlas/sample-service",
+      cloneUrl: "https://github.com/atlas/sample-service.git",
+      packageName: "@atlas/sample-service",
+      lastCommitSha: "abc1234",
+    });
+    const scan = repository.createScan({
+      id: "scan_fixture",
+      workspaceId: "test",
+      repositoryId: repo.id,
+      repoUrl: repo.url,
+    });
+    const artifacts = await scanRepository(fixtureRoot, { maxFiles: 100, maxFileBytes: 100_000 });
+    const graph = buildGraphFromArtifacts({ repository: repo, commitSha: "abc1234", artifacts, backboard: fakeBackboard() });
+    const context = buildScanContext({ repository: repo, graph, commitSha: "abc1234" });
+    repository.replaceGraphRows({ workspaceId: "test", repositoryId: repo.id, scanId: scan.id, graph });
+    repository.completeScan({ scanId: scan.id, commitSha: "abc1234", graph, context, artifacts, backboard: fakeBackboard() });
+    const app = await buildApp({
+      config: loadConfig({
+        rootDir: tempDir,
+        databaseUrl: `file:${path.join(tempDir, "atlas.db")}`,
+        databasePath: path.join(tempDir, "atlas.db"),
+        workspaceId: "test",
+        backboardApiKey: "test",
+      }),
+      repository,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/scans/scan_fixture/handoff",
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.commitSha).toBe("abc1234");
+    expect(body.files.length).toBeGreaterThan(0);
     await app.close();
     db.close();
     await fs.rm(tempDir, { recursive: true, force: true });

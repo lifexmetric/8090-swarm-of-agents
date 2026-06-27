@@ -211,7 +211,7 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
   }): Promise<string | null> {
     try {
       const response = await this.request<Record<string, unknown>>(`/assistants/${args.assistantId}/memories`, {
-        content: `Atlas scan knowledge for ${args.repository.owner}/${args.repository.name}@${args.commitSha}: ${args.content.slice(0, 2400)}`,
+        content: `Durable Atlas repo/system knowledge for future human and AI-agent handoff. Repository ${args.repository.owner}/${args.repository.name}@${args.commitSha}. Store confirmed architecture facts, risks, dependencies, and before-changing-this guidance only; preserve uncertainty markers. Summary: ${args.content.slice(0, 2400)}`,
         metadata: {
           product: "atlas",
           repositoryId: args.repository.id,

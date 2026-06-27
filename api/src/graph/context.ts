@@ -1,4 +1,4 @@
-import type { GraphData, GraphLink, GraphNode, RepositoryRecord, ScanContext } from "../types/domain.js";
+import type { GraphData, GraphLink, GraphNode, HandoffContextMap, RepositoryRecord, ScanContext } from "../types/domain.js";
 
 function evidenceList(items: GraphNode["evidence"] | GraphLink["evidence"]): string {
   if (!items || items.length === 0) return "- No direct evidence recorded.\n";
@@ -66,6 +66,61 @@ ${evidenceList(link.evidence)}
 `;
 }
 
+export function buildHandoffMap(args: {
+  repository: RepositoryRecord;
+  graph: GraphData;
+  commitSha: string;
+}): HandoffContextMap {
+  const byFile = new Map<string, HandoffContextMap["files"][number]>();
+
+  function entry(filePath: string): HandoffContextMap["files"][number] {
+    const existing = byFile.get(filePath);
+    if (existing) return existing;
+    const next = { filePath, nodes: [], edges: [] };
+    byFile.set(filePath, next);
+    return next;
+  }
+
+  for (const node of args.graph.nodes) {
+    for (const evidence of node.evidence ?? []) {
+      entry(evidence.filePath).nodes.push({
+        nodeId: node.id,
+        label: node.label,
+        kind: node.kind,
+        confidence: node.confidence,
+        lineStart: evidence.lineStart,
+        lineEnd: evidence.lineEnd,
+        detector: evidence.detector,
+        confidenceReason: evidence.confidenceReason,
+      });
+    }
+  }
+
+  for (const edge of args.graph.links) {
+    for (const evidence of edge.evidence ?? []) {
+      entry(evidence.filePath).edges.push({
+        edgeId: edge.id,
+        source: edge.source,
+        target: edge.target,
+        kind: edge.kind,
+        confidence: edge.confidence,
+        lineStart: evidence.lineStart,
+        lineEnd: evidence.lineEnd,
+        detector: evidence.detector,
+        confidenceReason: evidence.confidenceReason,
+      });
+    }
+  }
+
+  return {
+    purpose:
+      "Map changed files and line ranges from a future Git PR diff back to evidence-backed Atlas nodes and edges. Use this for human and AI-agent handoff; do not treat unmapped files as architectural claims without fresh evidence.",
+    repositoryId: args.repository.id,
+    commitSha: args.commitSha,
+    files: Array.from(byFile.values()).sort((a, b) => a.filePath.localeCompare(b.filePath)),
+  };
+}
+
 export function buildScanContext(args: {
   repository: RepositoryRecord;
   graph: GraphData;
@@ -98,6 +153,11 @@ All node and edge claims are derived from deterministic scanner findings. Backbo
       path: `link-context/${link.id}.md`,
       markdown: edgeContextMarkdown(link),
     })),
+    handoff: buildHandoffMap({
+      repository,
+      graph,
+      commitSha,
+    }),
     backboard,
   };
 }
