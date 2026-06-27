@@ -33,6 +33,21 @@ function CritBar({ value }: { value: number }) {
   );
 }
 
+function relationshipRows(contract: string): Array<{ label: string; value: string }> {
+  return contract
+    .split("\n")
+    .map((line) => line.trim())
+    .map((line) => {
+      const separator = line.indexOf(":");
+      if (separator <= 0) return null;
+      return {
+        label: line.slice(0, separator),
+        value: line.slice(separator + 1).trim(),
+      };
+    })
+    .filter((row): row is { label: string; value: string } => Boolean(row));
+}
+
 export function LinkPanel({
   link, graph = GRAPH, onClose, onSelectNode,
 }: {
@@ -44,6 +59,7 @@ export function LinkPanel({
   const Icon = EDGE_ICON[link.kind];
   const SourceIcon = source ? NODE_ICON[source.kind] : null;
   const TargetIcon = target ? NODE_ICON[target.kind] : null;
+  const rows = relationshipRows(link.contract);
 
   async function copy() {
     await navigator.clipboard.writeText(linkContextMarkdown(link));
@@ -105,6 +121,19 @@ export function LinkPanel({
 
       {/* Body */}
       <div className="scroll-thin flex-1 space-y-5 overflow-y-auto p-4">
+        {rows.length > 0 && (
+          <div>
+            <SectionLabel>Relationship</SectionLabel>
+            <div className="space-y-1.5 border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+              {rows.map((row) => (
+                <div key={`${row.label}:${row.value}`} className="grid grid-cols-[112px_minmax(0,1fr)] gap-2">
+                  <span className="font-mono text-[11px] text-[#555]">{row.label}</span>
+                  <span className="min-w-0 break-words font-mono text-[11px] text-[#ededed]">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <SectionLabel>Summary</SectionLabel>
           <p className="text-[13px] leading-relaxed text-[#888]">{link.summary}</p>
@@ -119,6 +148,24 @@ export function LinkPanel({
             {link.contract}
           </pre>
         </div>
+        {link.evidence && link.evidence.length > 0 && (
+          <div>
+            <SectionLabel>Evidence</SectionLabel>
+            <div className="space-y-2">
+              {link.evidence.slice(0, 6).map((evidence, index) => (
+                <div key={evidence.id ?? `${evidence.filePath}:${evidence.lineStart}:${index}`} className="border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-[#5c5e6a]">
+                      {evidence.filePath}:L{evidence.lineStart}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-[#3a3c48]">{evidence.detector}</span>
+                  </div>
+                  <CodeBlock code={evidence.snippet} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <SectionLabel>Failure behavior</SectionLabel>
           <p className="text-[13px] leading-relaxed text-[#888]">{link.failure}</p>

@@ -2,27 +2,23 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus, GitMerge, MessageSquare,
+  ArrowLeft, Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus, MessageSquare,
 } from "lucide-react";
 import {
-  GRAPH,
   NODE_KIND_META,
   EDGE_KIND_META,
   CONFIDENCE_META,
   NODE_GROUPS,
-  nodeById,
   nodeByIdIn,
-  dependenciesOf,
   dependenciesOfIn,
-  dependentsOf,
   dependentsOfIn,
   type GraphData,
   type GraphNode,
   type NodeKind,
 } from "@/lib/data";
-import { getScan, getScanGraph } from "@/lib/api";
+import { ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
 import { Graph3D, type Graph3DHandle } from "@/components/Graph3D";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NodePanel } from "@/components/NodePanel";
@@ -31,27 +27,9 @@ import { Logo, GithubMark, cn } from "@/components/ui";
 import { NODE_ICON } from "@/components/icons";
 
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
-const MOCK_REPO_LABEL = "acme/payments-platform";
 const EMPTY_GRAPH: GraphData = { nodes: [], links: [] };
 
-// The primary money-path through the system — used for critical-path mode
-const CRITICAL_PATH_NODE_IDS = new Set([
-  "api-gateway",
-  "orders-module",
-  "rabbitmq",
-  "payments-service",
-  "rbc-rail-adapter",
-]);
-
-const criticalPathLinkIdsStatic = new Set(
-  GRAPH.links
-    .filter(
-      (l) =>
-        CRITICAL_PATH_NODE_IDS.has(l.source) &&
-        CRITICAL_PATH_NODE_IDS.has(l.target),
-    )
-    .map((l) => l.id),
-);
+const EMPTY_SET = new Set<string>();
 
 export default function ExplorePage() {
   return (
@@ -63,8 +41,10 @@ export default function ExplorePage() {
 
 function ExplorePageContent() {
   const graphRef = React.useRef<Graph3DHandle>(null);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const scanId = searchParams.get("scanId");
+  const isSystemDetail = Boolean(scanId && searchParams.get("view") === "detail");
 
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = React.useState<string | null>(null);
@@ -72,9 +52,8 @@ function ExplorePageContent() {
   const [query, setQuery] = React.useState("");
   const [activeKinds, setActiveKinds] = React.useState<Set<NodeKind>>(new Set(ALL_KINDS));
   const [highRiskOnly, setHighRiskOnly] = React.useState(false);
-  const [criticalPathMode, setCriticalPathMode] = React.useState(false);
   const [graphLoad, setGraphLoad] = React.useState<{
-    scanId: string;
+    key: string;
     graph: GraphData | null;
     repoLabel: string;
     apiNotice: string | null;
@@ -85,26 +64,61 @@ function ExplorePageContent() {
   const [panelView, setPanelView] = React.useState<"overview" | "subgraph">("overview");
 
   React.useEffect(() => {
-    if (!scanId) return;
-
     let cancelled = false;
+    const key = isSystemDetail && scanId
+      ? `detail:${scanId}`
+      : scanId
+      ? `scan:${scanId}`
+      : `workspace:${ATLAS_WORKSPACE_ID}`;
+
     async function load() {
       try {
-        const [scan, graph] = await Promise.all([getScan(scanId!), getScanGraph(scanId!)]);
+        if (isSystemDetail && scanId) {
+          const [scan, detailGraph] = await Promise.all([getScan(scanId), getScanGraph(scanId)]);
+          if (cancelled) return;
+          setGraphLoad({
+            key,
+            graph: detailGraph,
+            repoLabel: `${scan.repoUrl.replace(/^https:\/\/github\.com\//, "")} · detail`,
+            apiNotice: null,
+          });
+          return;
+        }
+
+        if (scanId) {
+          const scan = await getScan(scanId);
+          const workspaceGraph = await getWorkspaceGraph(scan.workspaceId);
+          if (cancelled) return;
+          const repoCount = workspaceGraph.repositories.length;
+          setGraphLoad({
+            key,
+            graph: workspaceGraph,
+            repoLabel: repoCount === 1
+              ? scan.repoUrl.replace(/^https:\/\/github\.com\//, "")
+              : `${repoCount} repos · workspace:${workspaceGraph.workspaceId}`,
+            apiNotice: null,
+          });
+          return;
+        }
+
+        const workspaceGraph = await getWorkspaceGraph();
         if (cancelled) return;
+        const repoCount = workspaceGraph.repositories.length;
         setGraphLoad({
-          scanId: scanId!,
-          graph,
-          repoLabel: scan.repoUrl.replace(/^https:\/\/github\.com\//, ""),
+          key,
+          graph: workspaceGraph,
+          repoLabel: repoCount === 1
+            ? workspaceGraph.repositories[0].url.replace(/^https:\/\/github\.com\//, "")
+            : `${repoCount} repos · workspace:${workspaceGraph.workspaceId}`,
           apiNotice: null,
         });
       } catch (err) {
         if (!cancelled) {
           setGraphLoad({
-            scanId: scanId!,
+            key,
             graph: null,
-            repoLabel: scanId!,
-            apiNotice: err instanceof Error ? err.message : "Unable to load backend graph",
+            repoLabel: scanId ?? `workspace:${ATLAS_WORKSPACE_ID}`,
+            apiNotice: err instanceof Error ? err.message : "Unable to load real backend graph",
           });
         }
       }
@@ -113,33 +127,38 @@ function ExplorePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [scanId]);
+  }, [isSystemDetail, scanId]);
 
-  const activeGraphLoad = graphLoad?.scanId === scanId ? graphLoad : null;
-  const explicitScanFailed = Boolean(scanId && activeGraphLoad?.apiNotice && !activeGraphLoad.graph);
-  const graph = explicitScanFailed ? EMPTY_GRAPH : activeGraphLoad?.graph ?? GRAPH;
-  const repoLabel = activeGraphLoad?.repoLabel ?? MOCK_REPO_LABEL;
-  const apiNotice = activeGraphLoad?.apiNotice;
-  const isMockGraph = graph === GRAPH;
+  const graphKey = isSystemDetail && scanId
+    ? `detail:${scanId}`
+    : scanId
+    ? `scan:${scanId}`
+    : `workspace:${ATLAS_WORKSPACE_ID}`;
+  const activeGraphLoad = graphLoad?.key === graphKey ? graphLoad : null;
+  const graph = activeGraphLoad?.graph ?? EMPTY_GRAPH;
+  const repoLabel = activeGraphLoad?.repoLabel ?? `workspace:${ATLAS_WORKSPACE_ID}`;
+  const displayRepoLabel = isSystemDetail ? repoLabel.replace(/ · detail$/, "") : repoLabel;
+  const isGraphLoading = !activeGraphLoad;
+  const apiNotice = activeGraphLoad?.apiNotice ?? (isGraphLoading ? "Loading real graph…" : null);
+  const graphUnavailable = Boolean(activeGraphLoad && activeGraphLoad.apiNotice && !activeGraphLoad.graph);
+  const graphEmpty = Boolean(activeGraphLoad && !activeGraphLoad.apiNotice && graph.nodes.length === 0);
   const nodeByIdForGraph = React.useCallback(
-    (id: string) => (isMockGraph ? nodeById(id) : nodeByIdIn(graph, id)),
-    [graph, isMockGraph],
+    (id: string) => nodeByIdIn(graph, id),
+    [graph],
   );
   const dependenciesForGraph = React.useCallback(
-    (id: string) => (isMockGraph ? dependenciesOf(id) : dependenciesOfIn(graph, id)),
-    [graph, isMockGraph],
+    (id: string) => dependenciesOfIn(graph, id),
+    [graph],
   );
   const dependentsForGraph = React.useCallback(
-    (id: string) => (isMockGraph ? dependentsOf(id) : dependentsOfIn(graph, id)),
-    [graph, isMockGraph],
+    (id: string) => dependentsOfIn(graph, id),
+    [graph],
   );
-  const criticalPathLinkIds = isMockGraph ? criticalPathLinkIdsStatic : new Set<string>();
 
-  // Select from main graph — resets drill history and critical path mode
+  // Select from main graph and reset drill history.
   const selectNode = React.useCallback((id: string) => {
     setNodeHistory([]);
     setPanelView("overview");
-    setCriticalPathMode(false);
     if (!id) { setSelectedNodeId(null); setSelectedLinkId(null); return; }
     setSelectedLinkId(null);
     setSelectedNodeId(id);
@@ -171,15 +190,23 @@ function ExplorePageContent() {
     });
   }, []);
 
-  // Double-click a node → open sub-graph tab directly
+  // Double-click a system node to enter its scan-level graph; inside a system it opens the local sub-graph.
   const handleDoubleClickNode = React.useCallback((id: string) => {
+    const node = nodeByIdForGraph(id);
+    if (!isSystemDetail && node?.scanId) {
+      setNodeHistory([]);
+      setSelectedLinkId(null);
+      setSelectedNodeId(null);
+      router.push(`/explore?scanId=${encodeURIComponent(node.scanId)}&view=detail`);
+      return;
+    }
+
     setNodeHistory([]);
-    setCriticalPathMode(false);
     setSelectedLinkId(null);
     setSelectedNodeId(id);
     setPanelView("subgraph");
     graphRef.current?.focusNode(id);
-  }, []);
+  }, [isSystemDetail, nodeByIdForGraph, router]);
 
   const selectLink = React.useCallback((id: string) => {
     setSelectedNodeId(null);
@@ -268,13 +295,23 @@ function ExplorePageContent() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#0c0d10]">
-      {explicitScanFailed && (
+      {(isGraphLoading || graphUnavailable || graphEmpty) && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#0c0d10] px-6">
           <div className="max-w-md rounded-lg border border-[#2a2c36] bg-[#181a22] p-5">
-            <p className="mb-2 text-sm font-semibold text-[#e8e9ed]">Real scan unavailable</p>
-            <p className="text-[13px] leading-relaxed text-[#8b8d98]">{apiNotice}</p>
+            <p className="mb-2 text-sm font-semibold text-[#e8e9ed]">
+              {isGraphLoading
+                ? "Loading real graph"
+                : graphEmpty
+                ? "No real scan data yet"
+                : scanId
+                ? "Real scan unavailable"
+                : "Real workspace unavailable"}
+            </p>
+            <p className="text-[13px] leading-relaxed text-[#8b8d98]">
+              {graphEmpty ? "Run a repository scan to populate the workspace graph." : apiNotice}
+            </p>
             <Link href="/" className="mt-4 inline-flex rounded-lg bg-[#818cf8] px-3 py-1.5 text-[13px] font-semibold text-white">
-              Start another scan
+              {graphEmpty ? "Start a scan" : "Start another scan"}
             </Link>
           </div>
         </div>
@@ -289,9 +326,9 @@ function ExplorePageContent() {
           onSelectNode={selectNode}
           onSelectLink={selectLink}
           onDoubleClickNode={handleDoubleClickNode}
-          criticalPathMode={criticalPathMode && isMockGraph}
-          criticalPathNodeIds={CRITICAL_PATH_NODE_IDS}
-          criticalPathLinkIds={criticalPathLinkIds}
+          criticalPathMode={false}
+          criticalPathNodeIds={EMPTY_SET}
+          criticalPathLinkIds={EMPTY_SET}
         />
       </div>
 
@@ -305,8 +342,31 @@ function ExplorePageContent() {
             </div>
             <div className="h-4 w-px bg-[#2a2c36]" />
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-[#5c5e6a]">
-              <GithubMark className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden font-mono sm:inline">{repoLabel}</span>
+              {isSystemDetail ? (
+                <>
+                  <Link
+                    href="/explore"
+                    className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#2a2c36] px-2 py-1 font-mono text-[12px] text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    Workspace
+                  </Link>
+                  <span className="shrink-0 font-mono text-[12px] text-[#3a3c48]">/</span>
+                  <GithubMark className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
+                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                    Inside system
+                  </span>
+                </>
+              ) : (
+                <>
+                  <GithubMark className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden truncate font-mono sm:inline">{displayRepoLabel}</span>
+                  <span className="hidden rounded-md border border-[#2a2c36] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a] md:inline">
+                    System map
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex w-full min-w-0 items-center gap-1.5 sm:ml-auto sm:w-auto sm:justify-end sm:gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border border-[#2a2c36] bg-[#181a22] sm:flex-none">
@@ -347,15 +407,27 @@ function ExplorePageContent() {
                   <span className="hidden sm:inline">Reset</span>
                 </button>
               </div>
-              <Link
-                href={scanId ? `/export?scanId=${encodeURIComponent(scanId)}` : "/export"}
-                aria-label="Export context"
-                title="Export context"
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
-              >
-                <FileDown className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Export context</span>
-              </Link>
+              {scanId ? (
+                <Link
+                  href={`/export?scanId=${encodeURIComponent(scanId)}`}
+                  aria-label="Export context"
+                  title="Export context"
+                  className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export context</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/"
+                  aria-label="Scan to export"
+                  title="Scan to export"
+                  className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Scan to export</span>
+                </Link>
+              )}
               <button
                 type="button"
                 aria-label="Open handoff assistant"
@@ -412,24 +484,6 @@ function ExplorePageContent() {
               <ShieldAlert className="h-3 w-3" />
               High-risk · {highRiskCount}
             </button>
-            {/* Critical path mode */}
-            <button
-              onClick={() => {
-                setCriticalPathMode((v) => !v);
-                setSelectedNodeId(null);
-                setSelectedLinkId(null);
-              }}
-              className={cn(
-                "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
-                criticalPathMode
-                  ? "border-[#f87171]/40 bg-[#f87171]/10 text-[#f87171]"
-                  : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
-              )}
-              title="Highlight the critical money path through the system"
-            >
-              <GitMerge className="h-3 w-3" />
-              Critical path
-            </button>
           </div>
         </div>
       </div>
@@ -480,7 +534,7 @@ function ExplorePageContent() {
             <div className="space-y-1">
               {[
                 { key: "↑ / ↓", label: "Traverse" },
-                { key: "Dbl-click", label: "Sub-graph" },
+                { key: "Dbl-click", label: isSystemDetail ? "Sub-graph" : "Enter" },
                 { key: "Esc", label: "Deselect" },
               ].map((s) => (
                 <div key={s.key} className="flex items-center justify-between gap-2">
@@ -497,11 +551,11 @@ function ExplorePageContent() {
       {!panelOpen && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 w-[calc(100vw-24px)] max-w-xl -translate-x-1/2">
           <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/80 px-3.5 py-2 text-center font-mono text-[12px] text-[#5c5e6a] backdrop-blur-sm">
-              {apiNotice ?? (criticalPathMode
-              ? "Critical path highlighted · click any node to explore · Esc to clear"
-              : selectedNodeId
+              {apiNotice ?? (selectedNodeId
               ? "↑ parent  ↓ next dep  dbl-click sub-graph  Esc deselect"
-              : "Top-down flow · drag to pan · scroll to zoom · click any node")}
+              : isSystemDetail
+              ? "Inside system · click Workspace to go back up · double-click a node for sub-graph"
+              : "System map · double-click a system to enter · drag to pan · scroll to zoom")}
           </div>
         </div>
       )}
@@ -524,11 +578,6 @@ function ExplorePageContent() {
               </div>
             ))}
           </div>
-          {criticalPathMode && (
-            <p className="mt-2 font-mono text-[10px] text-[#f87171]">
-              Critical path active
-            </p>
-          )}
         </div>
       </div>
 

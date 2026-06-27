@@ -105,7 +105,7 @@ export default function LandingPage() {
               href="/explore"
               className="px-3 py-1.5 text-sm text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
             >
-              Live demo
+              Workspace
             </Link>
             <a
               href="https://github.com"
@@ -124,7 +124,7 @@ export default function LandingPage() {
       <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-start px-6 pt-20 pb-16">
         <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-[#2a2c36] px-3 py-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" />
-          <span className="font-mono text-[12px] text-[#5c5e6a]">Demo build — sample payments-platform</span>
+          <span className="font-mono text-[12px] text-[#5c5e6a]">Real repo scans · workspace graph</span>
         </div>
 
         <h1 className="mb-5 max-w-2xl text-[48px] font-semibold leading-[1.06] tracking-tight text-[#e8e9ed]">
@@ -321,7 +321,7 @@ export default function LandingPage() {
         <div className="mx-auto flex h-12 max-w-5xl items-center justify-between px-6">
           <span className="font-mono text-[12px] text-[#5c5e6a]">Atlas · hackathon build · 2026</span>
           <Link href="/explore" className="flex items-center gap-1.5 text-[13px] text-[#5c5e6a] transition-colors duration-150 hover:text-[#e8e9ed]">
-            Open demo <ArrowRight className="h-3.5 w-3.5" />
+            Open workspace <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       </footer>

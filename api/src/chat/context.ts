@@ -178,7 +178,6 @@ function edgeScore(edge: GraphLink, args: {
 function expandNeighborhood(nodes: GraphNode[], edges: GraphLink[]): { nodes: GraphNode[]; edges: GraphLink[] } {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const neighborhoodEdges = edges.filter((edge) => nodeIds.has(edge.source) || nodeIds.has(edge.target));
-  const expandedNodeIds = new Set([...nodeIds, ...neighborhoodEdges.flatMap((edge) => [edge.source, edge.target])]);
   return {
     nodes,
     edges: neighborhoodEdges.filter((edge, index, list) => list.findIndex((item) => item.id === edge.id) === index),
@@ -265,15 +264,26 @@ export function buildChatContext(args: {
   });
   const reposById = new Map(repos.map((repo) => [repo.id, repo]));
   const latestScanByRepoId = scanByRepo(latestScans);
-  const nodesById = new Map(workspace.nodes.map((node) => [node.id, node]));
+  const allScanNodes = latestScans.flatMap((scan) => scan.graph?.nodes ?? []);
+  const allScanLinks = latestScans.flatMap((scan) => scan.graph?.links ?? []);
+  const allNodes = [
+    ...workspace.nodes,
+    ...allScanNodes.filter((node) => !workspace.nodes.some((item) => item.id === node.id)),
+  ];
+  const allLinks = [
+    ...workspace.links,
+    ...allScanLinks.filter((edge) => !workspace.links.some((item) => item.id === edge.id)),
+  ];
+  const nodesById = new Map(allNodes.map((node) => [node.id, node]));
+  const edgesById = new Map(allLinks.map((edge) => [edge.id, edge]));
 
   let nodes = topScored(
-    workspace.nodes,
+    args.scanId ? allNodes : workspace.nodes,
     (node) => nodeScore(node, { queryTokens, selected, repos: reposById, selectedScanId: args.scanId }),
     MAX_NODES,
   );
   let edges = topScored(
-    workspace.links,
+    args.scanId ? allLinks : workspace.links,
     (edge) => edgeScore(edge, { queryTokens, selected, nodesById, repos: reposById, selectedScanId: args.scanId }),
     MAX_EDGES,
   );
@@ -311,11 +321,11 @@ export function buildChatContext(args: {
     if (node && !nodes.some((item) => item.id === node.id)) nodes = [node, ...nodes].slice(0, MAX_NODES);
   }
   if (selected.type === "edge") {
-    const edge = workspace.links.find((item) => item.id === selected.id);
+    const edge = edgesById.get(selected.id);
     if (edge && !edges.some((item) => item.id === edge.id)) edges = [edge, ...edges].slice(0, MAX_EDGES);
   }
 
-  const expanded = expandNeighborhood(nodes, workspace.links);
+  const expanded = expandNeighborhood(nodes, allLinks);
   nodes = expanded.nodes;
   edges = [...edges, ...expanded.edges]
     .filter((edge, index, list) => list.findIndex((item) => item.id === edge.id) === index)
