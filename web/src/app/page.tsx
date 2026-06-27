@@ -56,15 +56,15 @@ export default function LandingPage() {
   }
 
   return (
-    <main className="flex min-h-full flex-col bg-[#000]">
+    <main className="flex min-h-full flex-col bg-[#0c0d10]">
       {/* ── Nav ── */}
-      <header className="border-b border-[#2a2a2a]">
+      <header className="border-b border-[#2a2c36]">
         <nav className="mx-auto flex h-12 max-w-5xl items-center justify-between px-6">
           <Logo />
           <div className="flex items-center gap-1">
             <Link
               href="/explore"
-              className="px-3 py-1.5 text-sm text-[#888] transition-colors duration-150 hover:text-[#ededed]"
+              className="px-3 py-1.5 text-sm text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
             >
               Live demo
             </Link>
@@ -72,7 +72,7 @@ export default function LandingPage() {
               href="https://github.com"
               target="_blank"
               rel="noreferrer"
-              className="flex cursor-pointer items-center gap-2 rounded border border-[#2a2a2a] px-3 py-1.5 text-sm text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
+              className="flex cursor-pointer items-center gap-2 rounded rounded-lg border border-[#2a2c36] px-3 py-1.5 text-sm text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
             >
               <GithubMark className="h-3.5 w-3.5" />
               GitHub
@@ -83,16 +83,16 @@ export default function LandingPage() {
 
       {/* ── Hero ── */}
       <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-start px-6 pt-24 pb-20">
-        <div className="mb-8 inline-flex items-center gap-2 rounded-sm border border-[#2a2a2a] px-3 py-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-          <span className="font-mono text-[12px] text-[#555]">Demo build — sample payments-platform</span>
+        <div className="mb-8 inline-flex items-center gap-2 rounded-lg border border-[#2a2c36] px-3 py-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" />
+          <span className="font-mono text-[12px] text-[#5c5e6a]">Demo build — sample payments-platform</span>
         </div>
 
-        <h1 className="mb-5 max-w-2xl text-[48px] font-semibold leading-[1.06] tracking-tight text-[#ededed]">
+        <h1 className="mb-5 max-w-2xl text-[48px] font-semibold leading-[1.06] tracking-tight text-[#e8e9ed]">
           Understand any codebase before you touch it.
         </h1>
 
-        <p className="mb-10 max-w-xl text-[17px] leading-relaxed text-[#888]">
+        <p className="mb-10 max-w-xl text-[17px] leading-relaxed text-[#8b8d98]">
           Paste a GitHub repo and Atlas turns the full system — services, queues, databases,
           external APIs — into a navigable 3D graph with agent-ready context for every connection.
         </p>
@@ -100,23 +100,23 @@ export default function LandingPage() {
         {/* ── Input ── */}
         <form
           onSubmit={(e) => { e.preventDefault(); void start(); }}
-          className="mb-4 flex w-full max-w-xl items-center gap-0 border border-[#2a2a2a] bg-[#111] focus-within:border-[#3a3a3a]"
+          className="mb-4 flex w-full max-w-xl items-center gap-0 rounded-lg border border-[#2a2c36] bg-[#181a22] focus-within:border-[#818cf8]/50"
         >
           <label htmlFor="repo" className="sr-only">GitHub repository URL</label>
           <div className="flex flex-1 items-center gap-2.5 pl-4">
-            <GithubMark className="h-4 w-4 shrink-0 text-[#555]" />
+            <GithubMark className="h-4 w-4 shrink-0 text-[#5c5e6a]" />
             <input
               id="repo"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
               placeholder="github.com/acme/payments-platform"
-              className="w-full bg-transparent py-3 text-[14px] text-[#ededed] placeholder:text-[#555] focus:outline-none"
+              className="w-full bg-transparent py-3 text-[14px] text-[#e8e9ed] placeholder:text-[#5c5e6a] focus:outline-none"
             />
           </div>
           <button
             type="submit"
             disabled={scanning}
-            className="flex shrink-0 cursor-pointer items-center gap-2 bg-[#ededed] px-4 py-3 text-sm font-semibold text-black transition-colors duration-150 hover:bg-white disabled:pointer-events-none disabled:opacity-50"
+            className="flex shrink-0 cursor-pointer items-center gap-2 rounded-r-lg bg-[#818cf8] px-4 py-3 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1] disabled:pointer-events-none disabled:opacity-50"
           >
             Visualize
             <ArrowRight className="h-4 w-4" />
@@ -124,18 +124,18 @@ export default function LandingPage() {
         </form>
 
         {submitError && (
-          <p className="mb-4 max-w-xl text-[12px] text-[#f59e0b]">
+          <p className="mb-4 max-w-xl text-[12px] text-[#fbbf24]">
             {submitError}
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#555]">
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#5c5e6a]">
           <span>Try:</span>
           {SAMPLES.map((s) => (
             <button
               key={s}
               onClick={() => void start(s)}
-              className="cursor-pointer rounded-sm border border-[#2a2a2a] bg-[#111] px-2.5 py-1 font-mono text-[#888] transition-colors duration-150 hover:border-[#3a3a3a] hover:text-[#ededed]"
+              className="cursor-pointer rounded-md border border-[#2a2c36] bg-[#181a22] px-2.5 py-1 font-mono text-[#8b8d98] transition-colors duration-150 hover:border-[#3a3c48] hover:text-[#e8e9ed]"
             >
               {s}
             </button>
@@ -144,26 +144,26 @@ export default function LandingPage() {
       </section>
 
       {/* ── Divider ── */}
-      <div className="border-t border-[#2a2a2a]" />
+      <div className="border-t border-[#2a2c36]" />
 
       {/* ── Features ── */}
       <section className="mx-auto w-full max-w-5xl px-6 py-16">
-        <div className="grid gap-px border border-[#2a2a2a] bg-[#2a2a2a] sm:grid-cols-2">
+        <div className="grid gap-px overflow-hidden rounded-xl border border-[#2a2c36] bg-[#2a2c36] sm:grid-cols-2">
           {FEATURES.map((f) => (
-            <div key={f.title} className="bg-[#000] p-8">
-              <f.icon className="mb-4 h-5 w-5 text-[#555]" />
-              <h3 className="mb-2 text-[15px] font-semibold text-[#ededed]">{f.title}</h3>
-              <p className="text-sm leading-relaxed text-[#888]">{f.body}</p>
+            <div key={f.title} className="bg-[#0c0d10] p-8">
+              <f.icon className="mb-4 h-5 w-5 text-[#5c5e6a]" />
+              <h3 className="mb-2 text-[15px] font-semibold text-[#e8e9ed]">{f.title}</h3>
+              <p className="text-sm leading-relaxed text-[#8b8d98]">{f.body}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-[#2a2a2a]">
+      <footer className="border-t border-[#2a2c36]">
         <div className="mx-auto flex h-12 max-w-5xl items-center justify-between px-6">
-          <span className="font-mono text-[12px] text-[#555]">Atlas · hackathon build · 2026</span>
-          <Link href="/explore" className="flex items-center gap-1.5 text-[13px] text-[#555] transition-colors duration-150 hover:text-[#ededed]">
+          <span className="font-mono text-[12px] text-[#5c5e6a]">Atlas · hackathon build · 2026</span>
+          <Link href="/explore" className="flex items-center gap-1.5 text-[13px] text-[#5c5e6a] transition-colors duration-150 hover:text-[#e8e9ed]">
             Open demo <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>

@@ -69,40 +69,40 @@ export const NODE_KIND_META: Record<
   NodeKind,
   { label: string; color: string; group: string }
 > = {
-  service:  { label: "Service / Module",     color: "#f0f0f0", group: "Internal"       },
-  auth:     { label: "Auth / Identity",      color: "#f0f0f0", group: "Internal"       },
-  database: { label: "Data Store",           color: "#3b82f6", group: "Infrastructure" },
-  queue:    { label: "Queue / Stream",       color: "#3b82f6", group: "Infrastructure" },
-  external: { label: "External Dependency",  color: "#f97316", group: "External"       },
-  config:   { label: "Config / Env",         color: "#555555", group: "Config"         },
+  service:  { label: "Service / Module",     color: "#e8e9ed", group: "Internal"       },
+  auth:     { label: "Auth / Identity",      color: "#e8e9ed", group: "Internal"       },
+  database: { label: "Data Store",           color: "#60a5fa", group: "Infrastructure" },
+  queue:    { label: "Queue / Stream",       color: "#60a5fa", group: "Infrastructure" },
+  external: { label: "External Dependency",  color: "#fb923c", group: "External"       },
+  config:   { label: "Config / Env",         color: "#5c5e6a", group: "Config"         },
 };
 
 export const EDGE_KIND_META: Record<
   EdgeKind,
   { label: string; color: string; dashed: boolean }
 > = {
-  sync:    { label: "Sync API call",       color: "#888888", dashed: false },
-  async:   { label: "Async / queue",       color: "#3b82f6", dashed: true  },
-  db:      { label: "DB read/write",       color: "#3b82f6", dashed: false },
-  config:  { label: "Shared config",       color: "#555555", dashed: true  },
-  auth:    { label: "Auth delegation",     color: "#888888", dashed: false },
-  webhook: { label: "Webhook / callback",  color: "#f97316", dashed: true  },
+  sync:    { label: "Sync API call",       color: "#8b8d98", dashed: false },
+  async:   { label: "Async / queue",       color: "#60a5fa", dashed: true  },
+  db:      { label: "DB read/write",       color: "#60a5fa", dashed: false },
+  config:  { label: "Shared config",       color: "#5c5e6a", dashed: true  },
+  auth:    { label: "Auth delegation",     color: "#8b8d98", dashed: false },
+  webhook: { label: "Webhook / callback",  color: "#fb923c", dashed: true  },
 };
 
 export const CONFIDENCE_META: Record<
   Confidence,
   { label: string; color: string }
 > = {
-  confirmed: { label: "Confirmed", color: "#22c55e" },
-  inferred:  { label: "Inferred",  color: "#f59e0b" },
-  uncertain: { label: "Uncertain", color: "#ef4444" },
+  confirmed: { label: "Confirmed", color: "#34d399" },
+  inferred:  { label: "Inferred",  color: "#fbbf24" },
+  uncertain: { label: "Uncertain", color: "#f87171" },
 };
 
 // The 3 meaningful node groups shown in the legend
 export const NODE_GROUPS = [
-  { key: "Internal",       color: "#f0f0f0", desc: "Services and auth running inside your codebase" },
-  { key: "Infrastructure", color: "#3b82f6", desc: "Databases, queues, and message streams" },
-  { key: "External",       color: "#f97316", desc: "Third-party APIs and bank rails outside your control" },
+  { key: "Internal",       color: "#e8e9ed", desc: "Services and auth running inside your codebase" },
+  { key: "Infrastructure", color: "#60a5fa", desc: "Databases, queues, and message streams" },
+  { key: "External",       color: "#fb923c", desc: "Third-party APIs and bank rails outside your control" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -736,7 +736,44 @@ ${
 export function nodeContextMarkdown(node: GraphNode): string {
   const deps = dependenciesOf(node.id);
   const dependents = dependentsOf(node.id);
+
+  function depBlock(link: GraphLink, direction: "out" | "in"): string {
+    const peer =
+      direction === "out"
+        ? nodeById(link.target)
+        : nodeById(link.source);
+    const arrow = direction === "out" ? "→" : "←";
+    const lines = [
+      `### ${arrow} ${peer?.label ?? (direction === "out" ? link.target : link.source)} · ${EDGE_KIND_META[link.kind].label} · criticality ${link.criticality}/5`,
+      ``,
+      `**Summary:** ${link.summary}`,
+      ``,
+      `**Contract:**`,
+      `\`\`\``,
+      link.contract,
+      `\`\`\``,
+      ``,
+      `**Failure behavior:** ${link.failure}`,
+    ];
+    if (link.code) {
+      lines.push(``, `**Code** (\`${link.codePath}\`):`);
+      lines.push(`\`\`\``, link.code, `\`\`\``);
+    }
+    if (link.beforeYouChange) {
+      lines.push(``, `> ⚠️ **Before you change this:** ${link.beforeYouChange}`);
+    }
+    if (link.risks.length) {
+      lines.push(``, `**Risks:**`);
+      link.risks.forEach((r) => lines.push(`- ${r}`));
+    }
+    lines.push(``, `**Confidence:** ${CONFIDENCE_META[link.confidence].label}`);
+    return lines.join("\n");
+  }
+
   return `# ${node.label}
+
+**Kind:** ${NODE_KIND_META[node.kind].label} · **Domain:** ${node.domain} · **Confidence:** ${CONFIDENCE_META[node.confidence].label}
+${node.path ? `**Path:** \`${node.path}\`` : ""}
 
 ## What This Is
 ${node.whatItIs}
@@ -745,27 +782,111 @@ ${node.whatItIs}
 ${node.whyItExists}
 
 ## What It Owns
-${node.owns.length ? node.owns.map((o) => `- ${o}`).join("\n") : "- Nothing tracked"}
+${node.owns.length ? node.owns.map((o) => `- \`${o}\``).join("\n") : "- Nothing tracked"}
 
-## Depends On (outbound)
-${
-  deps.length
-    ? deps.map((l) => `- ${nodeById(l.target)?.label} (${EDGE_KIND_META[l.kind].label})`).join("\n")
-    : "- None"
-}
+## Depends On (${deps.length} outbound)
 
-## Depended On By (inbound / blast radius)
-${
-  dependents.length
-    ? dependents.map((l) => `- ${nodeById(l.source)?.label} (${EDGE_KIND_META[l.kind].label})`).join("\n")
-    : "- None"
-}
+${deps.length ? deps.map((l) => depBlock(l, "out")).join("\n\n---\n\n") : "_No outbound dependencies._"}
+
+## Depended On By (${dependents.length} inbound · blast radius)
+
+${dependents.length ? dependents.map((l) => depBlock(l, "in")).join("\n\n---\n\n") : "_Nothing depends on this node._"}
 
 ## Risk Flags
 ${node.risks.length ? node.risks.map((r) => `- ${r}`).join("\n") : "- None flagged"}
+`;
+}
 
-## Confidence
-${CONFIDENCE_META[node.confidence].label}
+// ---------------------------------------------------------------------------
+// Risk surface summary — single-page danger map for the whole system
+// ---------------------------------------------------------------------------
+
+export function riskSurfaceMarkdown(): string {
+  const criticalLinks = LINKS.filter((l) => l.criticality >= 5);
+  const riskyNodes = NODES.filter((n) => n.risks.length > 0);
+  const uncertainLinks = LINKS.filter((l) => l.confidence === "uncertain");
+  const beforeYouChangeLinks = LINKS.filter((l) => l.beforeYouChange);
+
+  function criticalityBar(c: number): string {
+    return "█".repeat(c) + "░".repeat(5 - c);
+  }
+
+  const critSection =
+    criticalLinks.length === 0
+      ? "_No criticality-5 links found._"
+      : criticalLinks
+          .map((l) => {
+            const src = nodeById(l.source);
+            const tgt = nodeById(l.target);
+            return [
+              `### ${src?.label ?? l.source} → ${tgt?.label ?? l.target}`,
+              `**Criticality:** ${criticalityBar(l.criticality)} ${l.criticality}/5 · **Kind:** ${EDGE_KIND_META[l.kind].label}`,
+              `**Failure:** ${l.failure}`,
+              l.beforeYouChange ? `> ⚠️ ${l.beforeYouChange}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n");
+          })
+          .join("\n\n---\n\n");
+
+  const riskNodeSection =
+    riskyNodes.length === 0
+      ? "_No risk-flagged nodes._"
+      : riskyNodes
+          .map((n) => {
+            return [
+              `### ${n.label} (${NODE_KIND_META[n.kind].label})`,
+              n.risks.map((r) => `- ${r}`).join("\n"),
+            ].join("\n");
+          })
+          .join("\n\n");
+
+  const uncertainSection =
+    uncertainLinks.length === 0
+      ? "_All dependencies have confirmed or inferred confidence._"
+      : uncertainLinks
+          .map((l) => {
+            const src = nodeById(l.source);
+            const tgt = nodeById(l.target);
+            return `- **${src?.label} → ${tgt?.label}** — ${l.summary.split(".")[0]}.`;
+          })
+          .join("\n");
+
+  const beforeSection =
+    beforeYouChangeLinks.length === 0
+      ? "_No gotchas recorded._"
+      : beforeYouChangeLinks
+          .map((l) => {
+            const src = nodeById(l.source);
+            const tgt = nodeById(l.target);
+            return [
+              `### ${src?.label} → ${tgt?.label}`,
+              l.beforeYouChange,
+            ].join("\n");
+          })
+          .join("\n\n");
+
+  return `# Risk Surface — payments-platform
+
+A single-page danger map. Read this before touching anything.
+
+## Critical Path Links (criticality 5/5)
+
+${critSection}
+
+## Risk-Flagged Nodes
+
+${riskNodeSection}
+
+## Uncertain Dependencies (verify before relying on)
+
+${uncertainSection}
+
+## Before You Change Anything
+
+Known gotchas and institutional knowledge across all links:
+
+${beforeSection}
 `;
 }
 
