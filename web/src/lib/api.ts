@@ -38,7 +38,7 @@ export interface ChatCitation {
   id: string;
   stableId?: string;
   label: string;
-  subjectType: "node" | "edge" | "repo" | "workspace";
+  subjectType: "node" | "edge" | "repo" | "workspace" | "handoff";
   subjectId?: string;
   repositoryId?: string;
   scanId?: string;
@@ -77,6 +77,73 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface PullRequestHunk {
+  id: string;
+  filePath: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  header: string;
+  patch: string;
+  addedLines: Array<{ line: number; content: string }>;
+  removedLines: Array<{ line: number; content: string }>;
+}
+
+export interface PullRequestHandoffRecord {
+  id: string;
+  workspaceId: string;
+  repositoryId?: string | null;
+  scanId?: string | null;
+  prUrl: string;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  state: string;
+  author?: string | null;
+  publicAccess: boolean;
+  base: { owner: string; repo: string; ref: string; sha: string };
+  head: { owner: string; repo: string; ref: string; sha: string };
+  changedFiles: Array<{ filename: string; status: string; additions: number; deletions: number; changes: number }>;
+  commits: Array<{ sha: string; message: string; author?: string | null; date?: string | null }>;
+  hunks: PullRequestHunk[];
+  mappings: Array<{
+    hunkId: string;
+    filePath: string;
+    nodes: Array<{ nodeId: string; label: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string }>;
+    edges: Array<{ edgeId: string; source: string; target: string; kind: string; confidence: Confidence; reason: string; evidenceId?: string; lineStart: number; lineEnd: number; snippet: string; detector: string }>;
+    uncertainty: string[];
+  }>;
+  humanBrief: {
+    summary: string;
+    taskState: string[];
+    impactedArchitecture: string[];
+    risks: string[];
+    missingTests: string[];
+    nextSteps: string[];
+    uncertainty: string[];
+    evidence: string[];
+  };
+  agentPacket: {
+    objective: string;
+    repo: string;
+    prUrl: string;
+    base: { owner: string; repo: string; ref: string; sha: string };
+    head: { owner: string; repo: string; ref: string; sha: string };
+    constraints: string[];
+    exactFilesAndHunks: PullRequestHunk[];
+    suggestedNextActions: string[];
+    knownUnknowns: string[];
+    evidenceRefs: string[];
+    backboardMemoryRefs: string[];
+  };
+  memoryStatus?: { attempted: boolean; succeeded: boolean; operationId?: string | null; error?: string | null; factCount: number } | null;
+  backboardMemoryOperationId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${ATLAS_API_URL}${path}`, {
     ...init,
@@ -99,6 +166,21 @@ export function createScan(repoUrl: string): Promise<ScanRecord> {
     method: "POST",
     body: JSON.stringify({ repoUrl }),
   });
+}
+
+export function createHandoffFromPr(prUrl: string): Promise<PullRequestHandoffRecord> {
+  return apiJson<PullRequestHandoffRecord>("/api/handoffs/from-pr", {
+    method: "POST",
+    body: JSON.stringify({ prUrl }),
+  });
+}
+
+export function getHandoff(id: string): Promise<PullRequestHandoffRecord> {
+  return apiJson<PullRequestHandoffRecord>(`/api/handoffs/${encodeURIComponent(id)}`);
+}
+
+export function getHandoffAgentPacket(id: string): Promise<PullRequestHandoffRecord["agentPacket"]> {
+  return apiJson<PullRequestHandoffRecord["agentPacket"]>(`/api/handoffs/${encodeURIComponent(id)}/agent-packet`);
 }
 
 export function getScan(scanId: string): Promise<ScanRecord> {
@@ -136,7 +218,7 @@ export function getChatMessages(sessionId: string): Promise<{ sessionId: string;
 
 export function sendChatMessage(
   sessionId: string,
-  input: { content: string; nodeId?: string | null; edgeId?: string | null; scanId?: string | null },
+  input: { content: string; nodeId?: string | null; edgeId?: string | null; scanId?: string | null; handoffId?: string | null },
 ): Promise<{ session: ChatSession; userMessage: ChatMessage; assistantMessage: ChatMessage }> {
   return apiJson<{ session: ChatSession; userMessage: ChatMessage; assistantMessage: ChatMessage }>(
     `/api/chat/sessions/${encodeURIComponent(sessionId)}/messages`,

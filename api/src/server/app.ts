@@ -4,9 +4,11 @@ import { z, ZodError } from "zod";
 import type { AtlasConfig } from "../config.js";
 import { AtlasRepository } from "../db/database.js";
 import { buildWorkspaceGraph } from "../graph/workspace.js";
+import { pullRequestUrlSchema } from "../github/pr.js";
 import { repoUrlSchema } from "../github/url.js";
 import type { ScanContext } from "../types/domain.js";
 import { ChatService } from "./chat-service.js";
+import { HandoffService } from "./handoff-service.js";
 import { ScanService } from "./scan-service.js";
 
 const createScanSchema = z.object({
@@ -17,6 +19,15 @@ const createScanSchema = z.object({
 
 const paramsSchema = z.object({
   scanId: z.string().min(1),
+});
+
+const createPrHandoffSchema = z.object({
+  prUrl: pullRequestUrlSchema,
+  workspaceId: z.string().trim().min(1).optional(),
+});
+
+const handoffParamsSchema = z.object({
+  id: z.string().min(1),
 });
 
 const workspaceParamsSchema = z.object({
@@ -47,6 +58,7 @@ const createChatMessageSchema = z.object({
   nodeId: z.string().trim().min(1).nullable().optional(),
   edgeId: z.string().trim().min(1).nullable().optional(),
   scanId: z.string().trim().min(1).nullable().optional(),
+  handoffId: z.string().trim().min(1).nullable().optional(),
 });
 
 function contextFiles(context: ScanContext) {
@@ -64,6 +76,7 @@ export async function buildApp(args: {
   repository: AtlasRepository;
   scanService?: ScanService;
   chatService?: ChatService;
+  handoffService?: HandoffService;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
@@ -74,6 +87,7 @@ export async function buildApp(args: {
 
   const scanService = args.scanService ?? new ScanService(args.config, args.repository);
   const chatService = args.chatService ?? new ChatService(args.config, args.repository);
+  const handoffService = args.handoffService ?? new HandoffService(args.config, args.repository);
 
   await app.register(cors, {
     origin: args.config.corsOrigin ?? true,
@@ -187,6 +201,33 @@ export async function buildApp(args: {
       files,
       combinedMarkdown: files.map((file) => `\n\n<!-- ===== ${file.path} ===== -->\n\n${file.markdown}`).join("\n"),
     };
+  });
+
+  app.post("/api/handoffs/from-pr", { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = createPrHandoffSchema.parse(request.body);
+    const handoff = await handoffService.createFromPullRequest(parsed);
+    reply.status(201).send(handoff);
+  });
+
+  app.get("/api/handoffs/:id", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = handoffParamsSchema.parse(request.params);
+    const handoff = handoffService.getHandoff(id);
+    if (!handoff) return reply.status(404).send({ error: "Not Found", message: "Handoff not found" });
+    return handoff;
+  });
+
+  app.get("/api/handoffs/:id/context", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = handoffParamsSchema.parse(request.params);
+    const context = handoffService.getContext(id);
+    if (!context) return reply.status(404).send({ error: "Not Found", message: "Handoff not found" });
+    return context;
+  });
+
+  app.get("/api/handoffs/:id/agent-packet", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = handoffParamsSchema.parse(request.params);
+    const agentPacket = handoffService.getAgentPacket(id);
+    if (!agentPacket) return reply.status(404).send({ error: "Not Found", message: "Handoff not found" });
+    return agentPacket;
   });
 
   app.post("/api/chat/sessions", { preHandler: requireAuth }, async (request, reply) => {

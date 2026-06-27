@@ -13,6 +13,7 @@ import type {
   GraphData,
   GraphLink,
   GraphNode,
+  PullRequestHandoffRecord,
   RepositoryRecord,
   ScanContext,
   ScanEvent,
@@ -181,6 +182,36 @@ export function migrate(db: SqliteDatabase): void {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS pull_request_handoffs (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      repository_id TEXT REFERENCES repositories(id) ON DELETE SET NULL,
+      scan_id TEXT REFERENCES scans(id) ON DELETE SET NULL,
+      pr_url TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      repo TEXT NOT NULL,
+      number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      state TEXT NOT NULL,
+      author TEXT,
+      public_access INTEGER NOT NULL,
+      base_json TEXT NOT NULL,
+      head_json TEXT NOT NULL,
+      changed_files_json TEXT NOT NULL,
+      commits_json TEXT NOT NULL,
+      hunks_json TEXT NOT NULL,
+      mappings_json TEXT NOT NULL,
+      human_brief_json TEXT NOT NULL,
+      agent_packet_json TEXT NOT NULL,
+      memory_facts_json TEXT,
+      memory_status_json TEXT,
+      backboard_assistant_id TEXT,
+      backboard_thread_id TEXT,
+      backboard_memory_operation_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -218,6 +249,8 @@ export function migrate(db: SqliteDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_evidence_stable_id ON evidence(stable_id);
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_workspace ON chat_sessions(workspace_id);
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_pr_handoffs_workspace ON pull_request_handoffs(workspace_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_pr_handoffs_repo_pr ON pull_request_handoffs(owner, repo, number);
   `);
 
   ensureColumn(db, "evidence", "stable_id", "TEXT");
@@ -568,6 +601,61 @@ export class AtlasRepository {
       );
   }
 
+  createPullRequestHandoff(input: PullRequestHandoffRecord): PullRequestHandoffRecord {
+    this.db
+      .prepare(`
+        INSERT INTO pull_request_handoffs
+          (id, workspace_id, repository_id, scan_id, pr_url, owner, repo, number, title, state, author, public_access,
+           base_json, head_json, changed_files_json, commits_json, hunks_json, mappings_json, human_brief_json,
+           agent_packet_json, memory_facts_json, memory_status_json, backboard_assistant_id, backboard_thread_id,
+           backboard_memory_operation_id, created_at, updated_at)
+        VALUES
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        input.id,
+        input.workspaceId,
+        input.repositoryId ?? null,
+        input.scanId ?? null,
+        input.prUrl,
+        input.owner,
+        input.repo,
+        input.number,
+        input.title,
+        input.state,
+        input.author ?? null,
+        input.publicAccess ? 1 : 0,
+        json(input.base),
+        json(input.head),
+        json(input.changedFiles),
+        json(input.commits),
+        json(input.hunks),
+        json(input.mappings),
+        json(input.humanBrief),
+        json(input.agentPacket),
+        input.memoryFacts.length > 0 ? json(input.memoryFacts.filter(isEvidenceBackedDurableFact)) : null,
+        input.memoryStatus ? json(input.memoryStatus) : null,
+        input.backboardAssistantId ?? null,
+        input.backboardThreadId ?? null,
+        input.backboardMemoryOperationId ?? null,
+        input.createdAt,
+        input.updatedAt,
+      );
+    return this.getPullRequestHandoff(input.id)!;
+  }
+
+  getPullRequestHandoff(id: string): PullRequestHandoffRecord | null {
+    const row = this.db.prepare("SELECT * FROM pull_request_handoffs WHERE id = ?").get(id) as PullRequestHandoffRow | undefined;
+    return row ? pullRequestHandoffFromRow(row) : null;
+  }
+
+  listPullRequestHandoffs(workspaceId: string, limit = 20): PullRequestHandoffRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM pull_request_handoffs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?")
+      .all(workspaceId, limit) as PullRequestHandoffRow[];
+    return rows.map(pullRequestHandoffFromRow);
+  }
+
   createChatSession(input: {
     id: string;
     workspaceId: string;
@@ -710,11 +798,33 @@ export class AtlasRepository {
         if (facts.length >= limit) return facts;
       }
     }
+    const handoffRows = this.db
+      .prepare(`
+        SELECT backboard_memory_operation_id, memory_facts_json, pr_url
+        FROM pull_request_handoffs
+        WHERE workspace_id = ?
+          AND backboard_memory_operation_id IS NOT NULL
+          AND memory_facts_json IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT ?
+      `)
+      .all(workspaceId, limit) as Array<{ backboard_memory_operation_id: string | null; memory_facts_json: string | null; pr_url: string }>;
+    for (const row of handoffRows) {
+      const durableFacts = parseJson<DurableMemoryFact[]>(row.memory_facts_json, []).filter(isEvidenceBackedDurableFact);
+      for (const fact of durableFacts) {
+        const evidence = fact.evidenceIds.slice(0, 4).join(", ");
+        const location = fact.evidenceRefs[0]
+          ? `${fact.evidenceRefs[0].filePath}:L${fact.evidenceRefs[0].lineStart}`
+          : "evidence-indexed PR handoff context";
+        facts.push(`${fact.fact} (PR ${row.pr_url}; evidence ${evidence}; ${location}; memory ${row.backboard_memory_operation_id})`);
+        if (facts.length >= limit) return facts;
+      }
+    }
     return facts;
   }
 
   countTable(tableName: string): number {
-    const allowed = new Set(["repositories", "scans", "nodes", "edges", "evidence", "backboard_records", "chat_sessions", "chat_messages"]);
+    const allowed = new Set(["repositories", "scans", "nodes", "edges", "evidence", "backboard_records", "chat_sessions", "chat_messages", "pull_request_handoffs"]);
     if (!allowed.has(tableName)) throw new Error(`Unsupported table count: ${tableName}`);
     const row = this.db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number };
     return row.count;
@@ -786,6 +896,36 @@ interface ChatMessageRow {
   created_at: string;
 }
 
+interface PullRequestHandoffRow {
+  id: string;
+  workspace_id: string;
+  repository_id: string | null;
+  scan_id: string | null;
+  pr_url: string;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  state: string;
+  author: string | null;
+  public_access: number;
+  base_json: string;
+  head_json: string;
+  changed_files_json: string;
+  commits_json: string;
+  hunks_json: string;
+  mappings_json: string;
+  human_brief_json: string;
+  agent_packet_json: string;
+  memory_facts_json: string | null;
+  memory_status_json: string | null;
+  backboard_assistant_id: string | null;
+  backboard_thread_id: string | null;
+  backboard_memory_operation_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 function repositoryFromRow(row: RepositoryRow): RepositoryRecord {
   return {
     id: row.id,
@@ -848,5 +988,59 @@ function scanFromRow(row: ScanRow): ScanRecord {
     backboardAssistantId: row.backboard_assistant_id,
     backboardThreadId: row.backboard_thread_id,
     backboardRunId: row.backboard_run_id,
+  };
+}
+
+function pullRequestHandoffFromRow(row: PullRequestHandoffRow): PullRequestHandoffRecord {
+  const memoryFacts = parseJson<DurableMemoryFact[]>(row.memory_facts_json, []).filter(isEvidenceBackedDurableFact);
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    repositoryId: row.repository_id,
+    scanId: row.scan_id,
+    prUrl: row.pr_url,
+    owner: row.owner,
+    repo: row.repo,
+    number: row.number,
+    title: row.title,
+    state: row.state,
+    author: row.author,
+    publicAccess: row.public_access === 1,
+    base: parseJson(row.base_json, { owner: row.owner, repo: row.repo, ref: "", sha: "" }),
+    head: parseJson(row.head_json, { owner: row.owner, repo: row.repo, ref: "", sha: "" }),
+    changedFiles: parseJson(row.changed_files_json, []),
+    commits: parseJson(row.commits_json, []),
+    hunks: parseJson(row.hunks_json, []),
+    mappings: parseJson(row.mappings_json, []),
+    humanBrief: parseJson(row.human_brief_json, {
+      summary: "",
+      taskState: [],
+      impactedArchitecture: [],
+      risks: [],
+      missingTests: [],
+      nextSteps: [],
+      uncertainty: [],
+      evidence: [],
+    }),
+    agentPacket: parseJson(row.agent_packet_json, {
+      objective: "",
+      repo: `${row.owner}/${row.repo}`,
+      prUrl: row.pr_url,
+      base: { owner: row.owner, repo: row.repo, ref: "", sha: "" },
+      head: { owner: row.owner, repo: row.repo, ref: "", sha: "" },
+      constraints: [],
+      exactFilesAndHunks: [],
+      suggestedNextActions: [],
+      knownUnknowns: [],
+      evidenceRefs: [],
+      backboardMemoryRefs: [],
+    }),
+    memoryFacts,
+    memoryStatus: parseJson(row.memory_status_json, null),
+    backboardAssistantId: row.backboard_assistant_id,
+    backboardThreadId: row.backboard_thread_id,
+    backboardMemoryOperationId: row.backboard_memory_operation_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

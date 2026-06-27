@@ -45,9 +45,11 @@ function selectedSubject(input: {
   scanId?: string | null;
   nodeId?: string | null;
   edgeId?: string | null;
+  handoffId?: string | null;
 }): ChatContextSubject {
   if (input.nodeId) return { type: "node", id: input.nodeId };
   if (input.edgeId) return { type: "edge", id: input.edgeId };
+  if (input.handoffId) return { type: "handoff", id: input.handoffId };
   if (input.scanId) return { type: "scan", id: input.scanId };
   return { type: "workspace", id: input.workspaceId };
 }
@@ -190,6 +192,7 @@ function contextMarkdown(args: {
   edges: GraphLink[];
   citations: ChatCitation[];
   memoryFacts: string[];
+  handoffMarkdown?: string | null;
 }): string {
   const lines = [
     `# Atlas Chat Context`,
@@ -217,6 +220,9 @@ function contextMarkdown(args: {
     ``,
     `## Known Backboard Memory Facts`,
     ...(args.memoryFacts.length > 0 ? args.memoryFacts.map((fact) => `- ${fact}`) : ["- No stored memory facts are locally indexed yet."]),
+    ``,
+    `## Selected PR Handoff Context`,
+    args.handoffMarkdown ?? "No PR handoff was selected for this question.",
   ];
   return lines.join("\n");
 }
@@ -239,6 +245,7 @@ export function buildChatContext(args: {
   nodeId?: string | null;
   edgeId?: string | null;
   scanId?: string | null;
+  handoffId?: string | null;
 }): ChatContextBundle {
   const repos = args.repository.listRepositories(args.workspaceId);
   const latestScans = args.repository.listLatestCompletedScans(args.workspaceId);
@@ -254,6 +261,7 @@ export function buildChatContext(args: {
     scanId: args.scanId,
     nodeId: args.nodeId,
     edgeId: args.edgeId,
+    handoffId: args.handoffId,
   });
   const reposById = new Map(repos.map((repo) => [repo.id, repo]));
   const latestScanByRepoId = scanByRepo(latestScans);
@@ -281,6 +289,20 @@ export function buildChatContext(args: {
         ...scan.graph.links,
         ...edges.filter((edge) => !scan.graph?.links.some((item) => item.id === edge.id)),
       ].slice(0, MAX_EDGES);
+    }
+  }
+  const handoff = args.handoffId ? args.repository.getPullRequestHandoff(args.handoffId) : null;
+  if (handoff?.repositoryId) {
+    const scan = latestScans.find((item) => item.repositoryId === handoff.repositoryId);
+    if (scan?.graph) {
+      nodes = [
+        ...scan.graph.nodes.filter((node) => handoff.mappings.some((mapping) => mapping.nodes.some((item) => item.nodeId === node.id))),
+        ...nodes,
+      ].filter((node, index, list) => list.findIndex((item) => item.id === node.id) === index).slice(0, MAX_NODES);
+      edges = [
+        ...scan.graph.links.filter((edge) => handoff.mappings.some((mapping) => mapping.edges.some((item) => item.edgeId === edge.id))),
+        ...edges,
+      ].filter((edge, index, list) => list.findIndex((item) => item.id === edge.id) === index).slice(0, MAX_EDGES);
     }
   }
 
@@ -345,6 +367,61 @@ export function buildChatContext(args: {
     }
     if (citations.length >= MAX_EVIDENCE) break;
   }
+  if (handoff) {
+    for (const mapping of handoff.mappings) {
+      for (const node of mapping.nodes) {
+        if (!node.evidenceId || citations.length >= MAX_EVIDENCE) continue;
+        const citation: ChatCitation = {
+          id: `E${citations.length + 1}`,
+          stableId: node.evidenceId,
+          label: `PR #${handoff.number} touches ${node.label}`,
+          subjectType: "node",
+          subjectId: node.nodeId,
+          repositoryId: handoff.repositoryId ?? undefined,
+          scanId: handoff.scanId ?? undefined,
+          commitSha: handoff.head.sha,
+          filePath: mapping.filePath,
+          lineStart: node.lineStart,
+          lineEnd: node.lineEnd,
+          snippet: redactSecrets(node.snippet).slice(0, 600),
+          detector: node.detector,
+          confidenceReason: node.reason,
+          confidence: node.confidence,
+        };
+        const key = evidenceKey(citation);
+        if (!seenEvidence.has(key)) {
+          seenEvidence.add(key);
+          citations.push(citation);
+        }
+      }
+      for (const edge of mapping.edges) {
+        if (!edge.evidenceId || citations.length >= MAX_EVIDENCE) continue;
+        const citation: ChatCitation = {
+          id: `E${citations.length + 1}`,
+          stableId: edge.evidenceId,
+          label: `PR #${handoff.number} may affect ${edge.source} -> ${edge.target}`,
+          subjectType: "edge",
+          subjectId: edge.edgeId,
+          repositoryId: handoff.repositoryId ?? undefined,
+          scanId: handoff.scanId ?? undefined,
+          commitSha: handoff.head.sha,
+          filePath: mapping.filePath,
+          lineStart: edge.lineStart,
+          lineEnd: edge.lineEnd,
+          snippet: redactSecrets(edge.snippet).slice(0, 600),
+          detector: edge.detector,
+          confidenceReason: edge.reason,
+          confidence: edge.confidence,
+        };
+        const key = evidenceKey(citation);
+        if (!seenEvidence.has(key)) {
+          seenEvidence.add(key);
+          citations.push(citation);
+        }
+      }
+      if (citations.length >= MAX_EVIDENCE) break;
+    }
+  }
 
   const relevantRepoIds = new Set([
     ...nodes.map((node) => node.repositoryId).filter((id): id is string => Boolean(id)),
@@ -354,6 +431,7 @@ export function buildChatContext(args: {
     const scan = latestScans.find((item) => item.id === args.scanId);
     if (scan) relevantRepoIds.add(scan.repositoryId);
   }
+  if (handoff?.repositoryId) relevantRepoIds.add(handoff.repositoryId);
   const relevantRepos = repos.filter((repo) => relevantRepoIds.has(repo.id));
   const finalRepos = relevantRepos.length > 0 ? relevantRepos : repos.slice(0, 6);
   const previousMessages = (args.sessionMessages ?? [])
@@ -364,6 +442,30 @@ export function buildChatContext(args: {
       createdAt: message.createdAt,
     }));
   const memoryFacts = args.repository.listBackboardMemoryFacts(args.workspaceId);
+  const handoffMarkdown = handoff
+    ? [
+        `PR ${handoff.prUrl}`,
+        handoff.humanBrief.summary,
+        ``,
+        `Task state:`,
+        ...handoff.humanBrief.taskState.map((item) => `- ${item}`),
+        ``,
+        `Impacted architecture:`,
+        ...handoff.humanBrief.impactedArchitecture.map((item) => `- ${item}`),
+        ``,
+        `Risks:`,
+        ...handoff.humanBrief.risks.map((item) => `- ${item}`),
+        ``,
+        `Missing tests:`,
+        ...handoff.humanBrief.missingTests.map((item) => `- ${item}`),
+        ``,
+        `Next steps:`,
+        ...handoff.humanBrief.nextSteps.map((item) => `- ${item}`),
+        ``,
+        `Known unknowns:`,
+        ...handoff.humanBrief.uncertainty.map((item) => `- ${item}`),
+      ].join("\n")
+    : null;
 
   return {
     workspaceId: args.workspaceId,
@@ -393,6 +495,7 @@ export function buildChatContext(args: {
       edges,
       citations,
       memoryFacts,
+      handoffMarkdown,
     }),
     previousMessages,
     memoryFacts,

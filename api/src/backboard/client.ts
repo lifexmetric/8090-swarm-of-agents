@@ -392,6 +392,70 @@ ${compactForPrompt(compactArtifacts, this.config.scanMaxPromptChars)}`;
     return this.addChatMemorySafe(args);
   }
 
+  async storeHandoffMemory(args: {
+    assistantId: string;
+    workspaceId: string;
+    handoffId: string;
+    prUrl: string;
+    facts: DurableMemoryFact[];
+  }): Promise<BackboardMemoryStatus> {
+    const facts = args.facts.filter((fact) => fact.evidenceIds.length > 0 && fact.evidenceRefs.length > 0);
+    if (facts.length === 0) {
+      return {
+        attempted: false,
+        succeeded: false,
+        operationId: null,
+        error: "No evidence-backed durable PR handoff facts were available for memory.",
+        factCount: 0,
+      };
+    }
+    try {
+      const response = await this.request<Record<string, unknown>>(`/assistants/${args.assistantId}/memories`, {
+        content: compactForPrompt(
+          {
+            purpose:
+              "Durable Atlas unfinished-PR handoff knowledge. Store only these evidence-indexed facts; do not infer additional architecture, ownership, or task state.",
+            workspaceId: args.workspaceId,
+            handoffId: args.handoffId,
+            prUrl: args.prUrl,
+            facts,
+          },
+          12_000,
+        ),
+        metadata: {
+          product: "atlas",
+          workspaceId: args.workspaceId,
+          handoffId: args.handoffId,
+          prUrl: args.prUrl,
+          factCount: facts.length,
+          evidenceIndexed: true,
+          evidenceIds: facts.flatMap((fact) => fact.evidenceIds),
+          repositories: Array.from(new Set(facts.map((fact) => fact.repositoryId).filter(Boolean))),
+          commits: Array.from(new Set(facts.map((fact) => fact.commitSha).filter(Boolean))),
+        },
+      });
+      const id = response.id ?? response.memory_id ?? response.operation_id;
+      if (typeof id === "string") {
+        return { attempted: true, succeeded: true, operationId: id, factCount: facts.length };
+      }
+      return {
+        attempted: true,
+        succeeded: false,
+        operationId: null,
+        error: "Backboard memory response did not include a memory operation id.",
+        factCount: facts.length,
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        succeeded: false,
+        operationId: null,
+        error: error instanceof Error ? error.message : "Backboard memory write failed for PR handoff facts.",
+        factCount: facts.length,
+      };
+    }
+  }
+
   private async addMemorySafe(args: {
     assistantId: string;
     repository: RepositoryRecord;

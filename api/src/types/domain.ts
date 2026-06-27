@@ -263,6 +263,130 @@ export interface HandoffContextMap {
   }>;
 }
 
+export type PullRequestHandoffStatus = "completed" | "failed";
+
+export interface PullRequestRef {
+  owner: string;
+  repo: string;
+  ref: string;
+  sha: string;
+}
+
+export interface PullRequestChangedFile {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+}
+
+export interface PullRequestCommit {
+  sha: string;
+  message: string;
+  author?: string | null;
+  date?: string | null;
+}
+
+export interface PullRequestHunk {
+  id: string;
+  filePath: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  header: string;
+  patch: string;
+  addedLines: Array<{ line: number; content: string }>;
+  removedLines: Array<{ line: number; content: string }>;
+}
+
+export interface PullRequestHandoffMapping {
+  hunkId: string;
+  filePath: string;
+  nodes: Array<{
+    nodeId: string;
+    label: string;
+    kind: NodeKind;
+    confidence: Confidence;
+    reason: string;
+    evidenceId?: string;
+    lineStart: number;
+    lineEnd: number;
+    snippet: string;
+    detector: string;
+  }>;
+  edges: Array<{
+    edgeId: string;
+    source: string;
+    target: string;
+    kind: EdgeKind;
+    confidence: Confidence;
+    reason: string;
+    evidenceId?: string;
+    lineStart: number;
+    lineEnd: number;
+    snippet: string;
+    detector: string;
+  }>;
+  uncertainty: string[];
+}
+
+export interface PullRequestHandoffBrief {
+  summary: string;
+  taskState: string[];
+  impactedArchitecture: string[];
+  risks: string[];
+  missingTests: string[];
+  nextSteps: string[];
+  uncertainty: string[];
+  evidence: string[];
+}
+
+export interface PullRequestAgentPacket {
+  objective: string;
+  repo: string;
+  prUrl: string;
+  base: PullRequestRef;
+  head: PullRequestRef;
+  constraints: string[];
+  exactFilesAndHunks: PullRequestHunk[];
+  suggestedNextActions: string[];
+  knownUnknowns: string[];
+  evidenceRefs: string[];
+  backboardMemoryRefs: string[];
+}
+
+export interface PullRequestHandoffRecord {
+  id: string;
+  workspaceId: string;
+  repositoryId?: string | null;
+  scanId?: string | null;
+  prUrl: string;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  state: string;
+  author?: string | null;
+  publicAccess: boolean;
+  base: PullRequestRef;
+  head: PullRequestRef;
+  changedFiles: PullRequestChangedFile[];
+  commits: PullRequestCommit[];
+  hunks: PullRequestHunk[];
+  mappings: PullRequestHandoffMapping[];
+  humanBrief: PullRequestHandoffBrief;
+  agentPacket: PullRequestAgentPacket;
+  memoryFacts: DurableMemoryFact[];
+  memoryStatus?: BackboardMemoryStatus | null;
+  backboardAssistantId?: string | null;
+  backboardThreadId?: string | null;
+  backboardMemoryOperationId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceGraph extends GraphData {
   workspaceId: string;
   repositories: RepositoryRecord[];
@@ -285,13 +409,14 @@ export type ChatContextSubject =
   | { type: "node"; id: string }
   | { type: "edge"; id: string }
   | { type: "scan"; id: string }
+  | { type: "handoff"; id: string }
   | { type: "workspace"; id: string };
 
 export interface ChatCitation {
   id: string;
   stableId?: string;
   label: string;
-  subjectType: "node" | "edge" | "repo" | "workspace";
+  subjectType: "node" | "edge" | "repo" | "workspace" | "handoff";
   subjectId?: string;
   repositoryId?: string;
   scanId?: string;

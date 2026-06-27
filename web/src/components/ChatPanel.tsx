@@ -124,6 +124,7 @@ function MessageBubble({
 export function ChatPanel({
   open,
   scanId,
+  handoffId = null,
   selectedNode,
   selectedLink,
   detailsOpen = false,
@@ -133,6 +134,7 @@ export function ChatPanel({
 }: {
   open: boolean;
   scanId: string | null;
+  handoffId?: string | null;
   selectedNode: GraphNode | null;
   selectedLink: GraphLink | null;
   detailsOpen?: boolean;
@@ -186,6 +188,7 @@ export function ChatPanel({
         nodeId: selectedNode?.id ?? null,
         edgeId: selectedLink?.id ?? null,
         scanId,
+        handoffId,
       });
       setSession(result.session);
       setMessages((prev) => [
@@ -203,11 +206,13 @@ export function ChatPanel({
 
   if (!open) return null;
 
-  const activeContext = contextLabel(selectedNode, selectedLink);
+  const activeContext = contextLabel(selectedNode, selectedLink) ?? (handoffId ? "PR handoff" : null);
   const selectedPrompt = selectedNode
     ? `What should a new developer know before changing ${selectedNode.label}?`
     : selectedLink
       ? "What is risky about this connection?"
+      : handoffId
+        ? "What should an AI agent do next for this unfinished PR?"
       : null;
 
   return (

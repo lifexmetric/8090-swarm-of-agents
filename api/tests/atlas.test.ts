@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { buildChatContext, formatCitationList } from "../src/chat/context.js";
 import {
@@ -16,8 +16,11 @@ import { buildWorkspaceGraph } from "../src/graph/workspace.js";
 import { buildHandoffMap, buildScanContext } from "../src/graph/context.js";
 import { buildGraphFromArtifacts } from "../src/graph/normalize.js";
 import { parseGitHubRepo, repoUrlSchema } from "../src/github/url.js";
+import { parseGitHubPullRequestUrl, parsePatchHunks } from "../src/github/pr.js";
+import { buildPullRequestMemoryFacts, mapPullRequestToGraph } from "../src/handoffs/pr-handoff.js";
 import { scanRepository } from "../src/scanner/scanner.js";
 import { buildApp } from "../src/server/app.js";
+import { HandoffService, type HandoffBackboardLike } from "../src/server/handoff-service.js";
 import { ScanService } from "../src/server/scan-service.js";
 import { ChatService, type ChatBackboardLike } from "../src/server/chat-service.js";
 import type {
@@ -244,6 +247,171 @@ describe("graph normalization", () => {
     expect(handoff.files.some((file) => file.filePath === "src/server.ts")).toBe(true);
     expect(handoff.files.flatMap((file) => file.nodes).every((node) => node.confidence && node.detector && node.evidenceId && node.snippet)).toBe(true);
     expect(handoff.files.flatMap((file) => file.edges).every((edge) => edge.confidence && edge.detector && edge.evidenceId && edge.snippet)).toBe(true);
+  });
+});
+
+describe("pull request handoff intake", () => {
+  const prPatch = [
+    "@@ -1,6 +1,8 @@",
+    " import fastify from \"fastify\";",
+    "+// TODO: add retry coverage before merge",
+    `+const token = "${FAKE_STRIPE_TOKEN}";`,
+    " export function buildServer() {",
+    "   const app = fastify();",
+    "   app.get(\"/health\", async () => ({ ok: true }));",
+  ].join("\n");
+
+  function mockGitHubFetch() {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+      if (href.endsWith("/pulls/12")) {
+        return new Response(JSON.stringify({
+          html_url: "https://github.com/atlas/sample-service/pull/12",
+          number: 12,
+          title: "Continue handoff intake",
+          state: "open",
+          user: { login: "contributor" },
+          base: { ref: "main", sha: "base1234567890", repo: { owner: { login: "atlas" }, name: "sample-service" } },
+          head: { ref: "handoff-branch", sha: "head1234567890", repo: { owner: { login: "atlas" }, name: "sample-service" } },
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (href.includes("/pulls/12/files")) {
+        return new Response(JSON.stringify([{
+          filename: "src/server.ts",
+          status: "modified",
+          additions: 2,
+          deletions: 0,
+          changes: 2,
+          patch: prPatch,
+        }]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (href.includes("/pulls/12/commits")) {
+        return new Response(JSON.stringify([{
+          sha: "head1234567890",
+          commit: { message: "Add PR handoff intake\n\nMore detail", author: { name: "Dev", date: "2026-06-27T00:00:00Z" } },
+          author: { login: "dev" },
+        }]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), { status: 404 });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    return () => {
+      globalThis.fetch = originalFetch;
+    };
+  }
+
+  function fakeHandoffBackboard(): HandoffBackboardLike {
+    return {
+      async createAssistant() {
+        return "asst_handoff";
+      },
+      async storeHandoffMemory(args) {
+        return {
+          attempted: args.facts.length > 0,
+          succeeded: args.facts.length > 0,
+          operationId: args.facts.length > 0 ? "mem_handoff" : null,
+          factCount: args.facts.length,
+        };
+      },
+    };
+  }
+
+  it("parses PR URLs and redacts parsed patch hunks", () => {
+    expect(parseGitHubPullRequestUrl("github.com/atlas/sample-service/pull/12")?.normalizedUrl).toBe(
+      "https://github.com/atlas/sample-service/pull/12",
+    );
+    expect(parseGitHubPullRequestUrl("https://gitlab.com/atlas/sample-service/pull/12")).toBeNull();
+
+    const hunks = parsePatchHunks("src/server.ts", prPatch);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].addedLines.some((line) => line.content.includes("[REDACTED]"))).toBe(true);
+    expect(JSON.stringify(hunks)).not.toContain(FAKE_STRIPE_TOKEN);
+  });
+
+  it("maps PR hunks to scan evidence and extracts only evidence-backed memory facts", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-pr-map-"));
+    const db = openDatabase(path.join(tempDir, "atlas.db"));
+    migrate(db);
+    const repository = new AtlasRepository(db);
+    const { repo, graph } = await seedCompletedScan(repository);
+    const scan = repository.getScan("scan_fixture")!;
+    const pr = {
+      url: "https://github.com/atlas/sample-service/pull/12",
+      owner: "atlas",
+      repo: "sample-service",
+      number: 12,
+      title: "Continue handoff intake",
+      state: "open",
+      author: "dev",
+      publicAccess: true,
+      base: { owner: "atlas", repo: "sample-service", ref: "main", sha: "base123" },
+      head: { owner: "atlas", repo: "sample-service", ref: "handoff", sha: "head123" },
+      changedFiles: [{ filename: "src/server.ts", status: "modified", additions: 2, deletions: 0, changes: 2, patch: redactSecrets(prPatch) }],
+      commits: [{ sha: "head123", message: "Add PR handoff intake", author: "dev", date: "2026-06-27T00:00:00Z" }],
+      hunks: parsePatchHunks("src/server.ts", prPatch),
+    };
+
+    const mappings = mapPullRequestToGraph({ pr, graph, context: scan.context!.handoff });
+    const facts = buildPullRequestMemoryFacts({ handoffId: "handoff_test", pr, repository: repo, mappings });
+    const unsupported = buildPullRequestMemoryFacts({
+      handoffId: "handoff_empty",
+      pr: { ...pr, hunks: parsePatchHunks("unknown.ts", "@@ -1 +1 @@\n+console.log(1)") },
+      repository: repo,
+      mappings: [{ hunkId: "x", filePath: "unknown.ts", nodes: [], edges: [], uncertainty: ["no evidence"] }],
+    });
+
+    expect(mappings.some((mapping) => mapping.nodes.length > 0 || mapping.edges.length > 0)).toBe(true);
+    expect(facts.length).toBeGreaterThan(0);
+    expect(facts.every((fact) => fact.evidenceIds.length > 0 && fact.evidenceRefs.length > 0)).toBe(true);
+    expect(unsupported).toHaveLength(0);
+    db.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("creates, persists, retrieves, and chats over a PR handoff without a GitHub token", async () => {
+    const restoreFetch = mockGitHubFetch();
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-pr-service-"));
+    const db = openDatabase(path.join(tempDir, "atlas.db"));
+    migrate(db);
+    const repository = new AtlasRepository(db);
+    await seedCompletedScan(repository);
+    const config = loadConfig({
+      rootDir: tempDir,
+      databaseUrl: `file:${path.join(tempDir, "atlas.db")}`,
+      databasePath: path.join(tempDir, "atlas.db"),
+      workspaceId: "test",
+      backboardApiKey: undefined,
+      backboardAssistantId: "asst_handoff",
+    });
+    const service = new HandoffService(config, repository, fakeHandoffBackboard());
+    const handoff = await service.createFromPullRequest({ prUrl: "https://github.com/atlas/sample-service/pull/12", workspaceId: "test" });
+    const stored = repository.getPullRequestHandoff(handoff.id);
+    const context = buildChatContext({
+      repository,
+      workspaceId: "test",
+      question: "What should an AI agent do next for this PR handoff?",
+      handoffId: handoff.id,
+    });
+
+    expect(stored?.publicAccess).toBe(true);
+    expect(stored?.humanBrief.summary).toContain("without a GitHub token");
+    expect(stored?.agentPacket.base.sha).toBe("base1234567890");
+    expect(stored?.agentPacket.head.sha).toBe("head1234567890");
+    expect(JSON.stringify(stored)).not.toContain(FAKE_STRIPE_TOKEN);
+    expect(stored?.memoryStatus?.operationId).toBe("mem_handoff");
+    expect(context.generatedMarkdown).toContain("Selected PR Handoff Context");
+    expect(context.evidence.length).toBeGreaterThan(0);
+
+    const app = await buildApp({ config, repository, handoffService: service });
+    const response = await app.inject({ method: "GET", url: `/api/handoffs/${handoff.id}/agent-packet` });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).exactFilesAndHunks.length).toBeGreaterThan(0);
+
+    await app.close();
+    restoreFetch();
+    db.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 });
 

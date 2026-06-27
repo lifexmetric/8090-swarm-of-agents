@@ -74,6 +74,7 @@ export class ChatService {
     nodeId?: string | null;
     edgeId?: string | null;
     scanId?: string | null;
+    handoffId?: string | null;
   }): Promise<{ session: ChatSessionRecord; userMessage: ChatMessageRecord; assistantMessage: ChatMessageRecord }> {
     const session = this.repository.getChatSession(sessionId);
     if (!session) throw Object.assign(new Error("Chat session not found"), { statusCode: 404 });
@@ -105,6 +106,7 @@ export class ChatService {
       nodeId: input.nodeId ?? session.selectedNodeId,
       edgeId: input.edgeId ?? session.selectedEdgeId,
       scanId: input.scanId ?? null,
+      handoffId: input.handoffId ?? null,
     });
 
     const response = await this.backboard.chat({

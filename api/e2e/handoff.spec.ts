@@ -8,6 +8,7 @@ const repos = [
   "https://github.com/fastify/fastify-plugin",
   "https://github.com/fastify/fastify-autoload",
 ];
+const publicPrUrl = "https://github.com/fastify/fastify-plugin/pull/289";
 
 interface ScanRecord {
   id: string;
@@ -55,6 +56,34 @@ interface ChatMessage {
   backboardMessageId?: string | null;
 }
 
+interface PullRequestHandoff {
+  id: string;
+  prUrl: string;
+  publicAccess: boolean;
+  scanId?: string | null;
+  changedFiles: Array<{ filename: string; additions: number; deletions: number }>;
+  hunks: Array<{ id: string; filePath: string; patch: string }>;
+  mappings: Array<{ hunkId: string; filePath: string; nodes: unknown[]; edges: unknown[]; uncertainty: string[] }>;
+  humanBrief: {
+    summary: string;
+    impactedArchitecture: string[];
+    missingTests: string[];
+    nextSteps: string[];
+    uncertainty: string[];
+    evidence: string[];
+  };
+  agentPacket: {
+    prUrl: string;
+    base: { ref: string; sha: string };
+    head: { ref: string; sha: string };
+    exactFilesAndHunks: unknown[];
+    suggestedNextActions: string[];
+    knownUnknowns: string[];
+    constraints: string[];
+  };
+  memoryStatus?: { attempted: boolean; succeeded: boolean; operationId?: string | null; error?: string | null; factCount: number } | null;
+}
+
 let primaryScan: ScanRecord;
 let secondaryScan: ScanRecord;
 let primaryGraph: GraphData;
@@ -62,6 +91,20 @@ let workspaceGraph: GraphData;
 let firstSession: ChatSession;
 let secondSession: ChatSession;
 let firstAssistantMessage: ChatMessage;
+let prHandoff: PullRequestHandoff;
+
+test.describe("public PR intake without Backboard", () => {
+  test("builds a UI handoff package from a real public PR URL without a GitHub token", async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("pr-handoff-input").fill(publicPrUrl);
+    await page.getByTestId("build-pr-handoff").click();
+    await expect(page.getByTestId("pr-handoff-review")).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByTestId("pr-handoff-review")).toContainText(/public\/no token/i);
+    await expect(page.getByTestId("pr-handoff-review")).toContainText(/without a GitHub token/i);
+    await expect(page.getByTestId("pr-hunk-mapping").first()).toBeVisible();
+  });
+});
 
 test.describe("real Backboard handoff E2E", () => {
 test.describe.configure({ mode: "serial" });
@@ -100,7 +143,7 @@ async function scanRepo(request: APIRequestContext, repoUrl: string): Promise<Sc
 async function sendChat(
   request: APIRequestContext,
   sessionId: string,
-  payload: { content: string; scanId?: string; nodeId?: string; edgeId?: string },
+  payload: { content: string; scanId?: string; nodeId?: string; edgeId?: string; handoffId?: string },
 ): Promise<{ session: ChatSession; assistantMessage: ChatMessage }> {
   return apiPost<{ session: ChatSession; assistantMessage: ChatMessage }>(
     request,
@@ -143,6 +186,13 @@ test("2. protected API mode rejects missing or invalid auth for scan and chat ro
     body: JSON.stringify({ workspaceId, title: "Invalid auth" }),
   });
   expect(invalidChat.status).toBe(401);
+
+  const missingHandoffAuth = await fetch(`${apiUrl}/api/handoffs/from-pr`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prUrl: publicPrUrl, workspaceId }),
+  });
+  expect(missingHandoffAuth.status).toBe(401);
 });
 
 test("3. failed real scan submission does not fall back to demo architecture", async ({ page }) => {
@@ -182,6 +232,34 @@ test("4. real scan prerequisite returns graph nodes, edges, and evidence", async
   ].length).toBeGreaterThan(0);
 });
 
+test("4b. public PR URL intake creates an evidence-grounded handoff with no GitHub token", async ({ request }) => {
+  test.setTimeout(240_000);
+  prHandoff = await apiPost<PullRequestHandoff>(request, "/api/handoffs/from-pr", {
+    prUrl: publicPrUrl,
+    workspaceId,
+  });
+  const stored = await apiGet<PullRequestHandoff>(request, `/api/handoffs/${encodeURIComponent(prHandoff.id)}`);
+  const packet = await apiGet<PullRequestHandoff["agentPacket"]>(
+    request,
+    `/api/handoffs/${encodeURIComponent(prHandoff.id)}/agent-packet`,
+  );
+
+  expect(stored.prUrl).toBe(publicPrUrl);
+  expect(stored.publicAccess).toBe(true);
+  expect(stored.scanId).toBe(primaryScan.id);
+  expect(stored.changedFiles.length).toBeGreaterThan(0);
+  expect(stored.hunks.length).toBeGreaterThan(0);
+  expect(stored.mappings.length).toBeGreaterThan(0);
+  expect(stored.humanBrief.summary).toMatch(/without a GitHub token/i);
+  expect(stored.humanBrief.nextSteps.length).toBeGreaterThan(0);
+  expect(stored.humanBrief.uncertainty.length).toBeGreaterThan(0);
+  expect(packet.prUrl).toBe(publicPrUrl);
+  expect(packet.base.sha).toBeTruthy();
+  expect(packet.head.sha).toBeTruthy();
+  expect(packet.exactFilesAndHunks.length).toBe(stored.hunks.length);
+  expect(JSON.stringify(stored)).not.toMatch(/gh[pousr]_|sk_live|xox[baprs]-|AKIA/);
+});
+
 test("5. real Backboard handoff chat stores an evidence-backed answer", async ({ request }) => {
   firstSession = await apiPost<ChatSession>(request, "/api/chat/sessions", {
     workspaceId,
@@ -205,6 +283,20 @@ test("5. real Backboard handoff chat stores an evidence-backed answer", async ({
     `/api/chat/sessions/${encodeURIComponent(firstSession.id)}/messages`,
   );
   expect(stored.messages.some((message) => message.content === firstAssistantMessage.content)).toBe(true);
+});
+
+test("5b. handoff chat answers with selected PR context and uncertainty", async ({ request }) => {
+  const session = await apiPost<ChatSession>(request, "/api/chat/sessions", {
+    workspaceId,
+    title: "E2E public PR continuation",
+  });
+  const result = await sendChat(request, session.id, {
+    content: "What should an AI agent do next for this unfinished PR handoff?",
+    handoffId: prHandoff.id,
+  });
+
+  expect(result.assistantMessage.content).toMatch(/PR|handoff|next|verify|uncertain|evidence/i);
+  expect(result.assistantMessage.citations.length > 0 || result.assistantMessage.content.includes("I do not have evidence")).toBe(true);
 });
 
 test("6. UI node deep dive answers what to inspect before changing a selected node", async ({ page }) => {
