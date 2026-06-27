@@ -15,7 +15,7 @@ import {
 import { Logo, GithubMark } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ScanOverlay } from "@/components/ScanOverlay";
-import { createScan } from "@/lib/api";
+import { ATLAS_API_CONFIGURED, createScan } from "@/lib/api";
 
 const SAMPLES = ["fastify/fastify-plugin", "fastify/fastify-autoload", "stripe/stripe-node"];
 
@@ -138,6 +138,12 @@ export default function LandingPage() {
     setRepo(target);
     setScanId(null);
     setScanning(false);
+
+    if (!ATLAS_API_CONFIGURED) {
+      setError("Repository scanning needs a deployed Atlas API. Open Workspace to view the demo graph.");
+      return;
+    }
+
     setCreatingScan(true);
     try {
       const scan = await createScan(target);

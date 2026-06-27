@@ -32,7 +32,7 @@ import {
   type GraphNode,
   type NodeKind,
 } from "@/lib/data";
-import { ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
+import { ATLAS_API_CONFIGURED, ATLAS_WORKSPACE_ID, getScan, getScanGraph, getWorkspaceGraph } from "@/lib/api";
 import { Graph3D, type Graph3DHandle, type LayoutMode } from "@/components/Graph3D";
 import {
   buildSystemGraph,
@@ -98,6 +98,16 @@ function ExplorePageContent() {
 
     async function load() {
       try {
+        if (!ATLAS_API_CONFIGURED && !scanId) {
+          setGraphLoad({
+            key,
+            graph: GRAPH,
+            repoLabel: "demo · acme/payments-platform",
+            apiNotice: null,
+          });
+          return;
+        }
+
         if (isSystemDetail && scanId) {
           const [scan, detailGraph] = await Promise.all([getScan(scanId), getScanGraph(scanId)]);
           if (cancelled) return;

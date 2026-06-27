@@ -1,6 +1,10 @@
 import type { Confidence, EdgeKind, Evidence, GraphData, GraphLink, GraphNode, NodeKind } from "./data";
 
-export const ATLAS_API_URL = (process.env.NEXT_PUBLIC_ATLAS_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+const CONFIGURED_ATLAS_API_URL = process.env.NEXT_PUBLIC_ATLAS_API_URL?.trim();
+const DEFAULT_LOCAL_API_URL = process.env.NODE_ENV === "development" ? "http://localhost:3001" : "";
+
+export const ATLAS_API_URL = (CONFIGURED_ATLAS_API_URL || DEFAULT_LOCAL_API_URL).replace(/\/$/, "");
+export const ATLAS_API_CONFIGURED = Boolean(ATLAS_API_URL);
 const API_TOKEN = process.env.NEXT_PUBLIC_ATLAS_API_AUTH_TOKEN?.trim();
 export const DEFAULT_WORKSPACE_ID = process.env.NEXT_PUBLIC_ATLAS_WORKSPACE_ID?.trim() || "local-dev";
 export const ATLAS_WORKSPACE_ID = DEFAULT_WORKSPACE_ID;
@@ -128,6 +132,10 @@ export class AtlasApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!ATLAS_API_CONFIGURED) {
+    throw new AtlasApiError("Backend API is not configured for this deployment.", 0);
+  }
+
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
   if (init?.body && !headers.has("Content-Type")) {
