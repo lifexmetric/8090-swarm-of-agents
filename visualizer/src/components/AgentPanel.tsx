@@ -12,7 +12,7 @@ interface Props {
 type Phase = 'loading' | 'needs-config' | 'ready' | 'diagnosing' | 'diagnosed' | 'creating-pr' | 'pr-created' | 'error';
 
 export default function AgentPanel({ evidence, onClose }: Props) {
-  const { node, calmCtx } = evidence;
+  const { node, calmCtx, repoId } = evidence;
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [configOpen, setConfigOpen] = useState(false);
@@ -21,14 +21,16 @@ export default function AgentPanel({ evidence, onClose }: Props) {
   const [saving, setSaving] = useState(false);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionMeta, setSessionMeta] = useState<{ commitCount: number; logsAvailable: boolean } | null>(null);
+  const [sessionMeta, setSessionMeta] = useState<{ commitCount: number; logsAvailable: boolean; codeGraphAvailable: boolean } | null>(null);
 
+  const [thinkingText, setThinkingText] = useState('');
   const [streamText, setStreamText] = useState('');
   const [currentDiagnosis, setCurrentDiagnosis] = useState<Diagnosis | null>(null);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
+  const thinkingRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getConfig()
@@ -53,6 +55,12 @@ export default function AgentPanel({ evidence, onClose }: Props) {
     }
   }, [streamText]);
 
+  useEffect(() => {
+    if (thinkingRef.current) {
+      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
+    }
+  }, [thinkingText]);
+
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
@@ -69,15 +77,16 @@ export default function AgentPanel({ evidence, onClose }: Props) {
 
   const handleDiagnose = async () => {
     setPhase('diagnosing');
+    setThinkingText('');
     setStreamText('');
     setCurrentDiagnosis(null);
     setError(null);
     let diagnosisReceived = false;
 
     try {
-      const sess = await createSession(node.id, node.name, calmCtx);
+      const sess = await createSession(node.id, node.name, calmCtx, repoId);
       setSessionId(sess.id);
-      setSessionMeta({ commitCount: sess.commitCount, logsAvailable: sess.logsAvailable });
+      setSessionMeta({ commitCount: sess.commitCount, logsAvailable: sess.logsAvailable, codeGraphAvailable: sess.codeGraphAvailable });
 
       await diagnose(
         sess.id,
@@ -91,6 +100,7 @@ export default function AgentPanel({ evidence, onClose }: Props) {
           setError(err);
           setPhase('error');
         },
+        text => setThinkingText(prev => prev + text),
       );
 
       if (!diagnosisReceived) setPhase('diagnosed');
@@ -196,6 +206,9 @@ export default function AgentPanel({ evidence, onClose }: Props) {
             <span className={sessionMeta.logsAvailable ? 'text-green-400' : 'text-slate-500'}>
               logs {sessionMeta.logsAvailable ? 'included' : 'unavailable'}
             </span>
+            <span className={sessionMeta.codeGraphAvailable ? 'text-cyan-400' : 'text-slate-500'}>
+              code {sessionMeta.codeGraphAvailable ? 'included' : 'not embedded'}
+            </span>
             {sessionId && <span className="font-mono text-slate-600 ml-auto">{sessionId.slice(0, 8)}</span>}
           </div>
         )}
@@ -216,18 +229,34 @@ export default function AgentPanel({ evidence, onClose }: Props) {
           </>
         )}
 
-        {/* Streaming log */}
-        {(phase === 'diagnosing' || (streamText && !currentDiagnosis)) && (
+        {/* Thinking stream (extended thinking CoT) */}
+        {(phase === 'diagnosing' || thinkingText) && !currentDiagnosis && (
+          <div>
+            <div className="text-[10px] text-slate-600 mb-1 flex items-center gap-1.5 uppercase tracking-wide">
+              {phase === 'diagnosing' && !thinkingText && <Loader size={10} className="animate-spin" />}
+              Thinking
+            </div>
+            <div
+              ref={thinkingRef}
+              className="bg-slate-950 rounded-lg p-3 text-[11px] text-slate-500 font-mono leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap italic"
+            >
+              {thinkingText || <span className="text-slate-700 animate-pulse">Analyzing evidence...</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Reasoning stream (text output after thinking) */}
+        {(phase === 'diagnosing' || streamText) && !currentDiagnosis && (
           <div>
             <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1.5 uppercase tracking-wide">
-              {phase === 'diagnosing' && <Loader size={10} className="animate-spin" />}
+              {phase === 'diagnosing' && !streamText && <Loader size={10} className="animate-spin" />}
               Claude reasoning
             </div>
             <div
               ref={logRef}
               className="bg-slate-950 rounded-lg p-3 text-[11px] text-slate-300 font-mono leading-relaxed max-h-52 overflow-y-auto whitespace-pre-wrap"
             >
-              {streamText || <span className="text-slate-600 animate-pulse">Thinking...</span>}
+              {streamText || <span className="text-slate-600 animate-pulse">Waiting for reasoning...</span>}
             </div>
           </div>
         )}

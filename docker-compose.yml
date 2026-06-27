@@ -18,6 +18,13 @@ services:
       - "8010:8010"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CHROMA_PATH=/app/data/chroma
+      - MODELS_DIR=/app/models
+      - REPO_ROOT=/repo
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - scan-engine-data:/app/data
+      - .:/repo:ro
     restart: unless-stopped
 
   visualizer:
@@ -31,3 +38,4 @@ services:
 
 volumes:
   platform-data:
+  scan-engine-data:

@@ -56,21 +56,28 @@ def _load():
 def _embed(texts: list[str]) -> np.ndarray:
     _load()
 
-    encodings = _tokenizer.encode_batch(texts)
-    input_ids      = np.array([e.ids            for e in encodings], dtype=np.int64)
-    attention_mask = np.array([e.attention_mask  for e in encodings], dtype=np.int64)
+    micro_batch = int(os.environ.get('EMBED_MICRO_BATCH', '8'))
+    results = []
 
-    input_names = {inp.name for inp in _session.get_inputs()}
-    feed: dict = {'input_ids': input_ids, 'attention_mask': attention_mask}
-    if 'token_type_ids' in input_names:
-        feed['token_type_ids'] = np.array([e.type_ids for e in encodings], dtype=np.int64)
+    for i in range(0, len(texts), micro_batch):
+        sub = texts[i: i + micro_batch]
+        encodings = _tokenizer.encode_batch(sub)
+        input_ids      = np.array([e.ids            for e in encodings], dtype=np.int64)
+        attention_mask = np.array([e.attention_mask  for e in encodings], dtype=np.int64)
 
-    token_embeds = _session.run(None, feed)[0].astype(np.float32)  # [B, seq, dim]
+        input_names = {inp.name for inp in _session.get_inputs()}
+        feed: dict = {'input_ids': input_ids, 'attention_mask': attention_mask}
+        if 'token_type_ids' in input_names:
+            feed['token_type_ids'] = np.array([e.type_ids for e in encodings], dtype=np.int64)
 
-    mask   = attention_mask[..., np.newaxis].astype(np.float32)
-    pooled = (token_embeds * mask).sum(axis=1) / mask.sum(axis=1).clip(min=1e-9)
-    norms  = np.linalg.norm(pooled, axis=1, keepdims=True).clip(min=1e-9)
-    return (pooled / norms).astype(np.float32)
+        token_embeds = _session.run(None, feed)[0].astype(np.float32)  # [B, seq, dim]
+
+        mask   = attention_mask[..., np.newaxis].astype(np.float32)
+        pooled = (token_embeds * mask).sum(axis=1) / mask.sum(axis=1).clip(min=1e-9)
+        norms  = np.linalg.norm(pooled, axis=1, keepdims=True).clip(min=1e-9)
+        results.append(pooled / norms)
+
+    return np.concatenate(results, axis=0).astype(np.float32)
 
 
 class JinaCodeEmbedding(EmbeddingFunction):
@@ -80,14 +87,57 @@ class JinaCodeEmbedding(EmbeddingFunction):
         return _embed(list(docs)).tolist()
 
 
+_chroma_client = None
+
+
+def _get_client() -> chromadb.ClientAPI:
+    global _chroma_client
+    if _chroma_client is not None:
+        return _chroma_client
+    chroma_path = os.environ.get('CHROMA_PATH', '/app/data/chroma')
+    os.makedirs(chroma_path, exist_ok=True)
+    print(f'[embedder] initialising persistent ChromaDB at {chroma_path}')
+    _chroma_client = chromadb.PersistentClient(path=chroma_path)
+    return _chroma_client
+
+
+def get_or_create_collection(repo_id: str) -> chromadb.Collection:
+    """Get an existing collection or create a new one for this repo."""
+    client = _get_client()
+    coll = client.get_or_create_collection(
+        name=f'repo_{repo_id}',
+        embedding_function=JinaCodeEmbedding(),
+        metadata={'repo_id': repo_id},
+    )
+    print(f'[embedder] collection repo_{repo_id}: {coll.count()} chunks')
+    return coll
+
+
+def list_collections() -> list[str]:
+    """List all embedded repo IDs."""
+    client = _get_client()
+    names = [c.name for c in client.list_collections()]
+    return [n.replace('repo_', '', 1) for n in names if n.startswith('repo_')]
+
+
+def delete_collection(repo_id: str):
+    """Delete a repo's collection."""
+    client = _get_client()
+    try:
+        client.delete_collection(name=f'repo_{repo_id}')
+        print(f'[embedder] deleted collection repo_{repo_id}')
+    except Exception:
+        pass
+
+
 def make_collection(name: str = 'repo') -> chromadb.Collection:
-    client = chromadb.EphemeralClient()
-    return client.create_collection(name, embedding_function=JinaCodeEmbedding())
+    """Legacy: create a fresh ephemeral collection. Use get_or_create_collection instead."""
+    return get_or_create_collection(name.replace('repo_', '', 1) if name.startswith('repo_') else name)
 
 
 # ── chunking ──────────────────────────────────────────────────────────────────
 
-CHUNK_LINES = 60
+CHUNK_LINES = 40
 
 
 def _chunks(rel_path: str, content: str) -> List[dict]:
@@ -104,7 +154,7 @@ def _chunks(rel_path: str, content: str) -> List[dict]:
     return result
 
 
-def embed_service(collection: chromadb.Collection, service_name: str, files: list[dict]):
+def embed_service(collection: chromadb.Collection, service_name: str, files: list[dict], on_progress=None):
     ids, docs, metas = [], [], []
 
     for f in files:
@@ -116,8 +166,16 @@ def embed_service(collection: chromadb.Collection, service_name: str, files: lis
     if not ids:
         return
 
-    batch = 2000
+    batch = 32
+    total_batches = (len(ids) + batch - 1) // batch
+    print(f'[embedder] embedding {len(ids)} chunks in {total_batches} batches (micro_batch={os.environ.get("EMBED_MICRO_BATCH", "8")})')
+
     for i in range(0, len(ids), batch):
+        batch_num = i // batch + 1
+        if batch_num % 5 == 0 or batch_num == total_batches:
+            print(f'[embedder]   batch {batch_num}/{total_batches}')
+        if on_progress:
+            on_progress(batch_num, total_batches, service_name)
         collection.add(
             ids=ids[i: i + batch],
             documents=docs[i: i + batch],

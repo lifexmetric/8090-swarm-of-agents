@@ -48,11 +48,16 @@ export async function fetchCommits(serviceId: string): Promise<Commit[]> {
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
-export async function createSession(nodeId: string, nodeName: string, calmCtx: CalmCtx): Promise<{ id: string; commitCount: number; logsAvailable: boolean }> {
+export async function createSession(
+  nodeId: string,
+  nodeName: string,
+  calmCtx: CalmCtx,
+  repoId?: string | null,
+): Promise<{ id: string; commitCount: number; logsAvailable: boolean; codeGraphAvailable: boolean }> {
   const r = await fetch(`${BASE}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nodeId, nodeName, systemId: 'banking-system', calmCtx }),
+    body: JSON.stringify({ nodeId, nodeName, systemId: 'banking-system', calmCtx, repoId }),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -81,6 +86,7 @@ export async function diagnose(
   onText: (t: string) => void,
   onDiagnosis: (d: Diagnosis) => void,
   onError: (e: string) => void,
+  onThinking?: (t: string) => void,
 ): Promise<void> {
   const res = await fetch(`${BASE}/sessions/${sessionId}/diagnose`, { method: 'POST' });
   if (!res.ok) { onError(await res.text()); return; }
@@ -101,6 +107,7 @@ export async function diagnose(
         if (!line.startsWith('data: ')) continue;
         try {
           const evt = JSON.parse(line.slice(6));
+          if (evt.type === 'thinking')  onThinking?.(evt.text);
           if (evt.type === 'text')      onText(evt.text);
           if (evt.type === 'diagnosis') onDiagnosis(evt.result);
           if (evt.type === 'error')     onError(evt.message);

@@ -8,22 +8,34 @@ import FilterBar from './components/FilterBar';
 import EvidencePanel from './components/EvidencePanel';
 import AgentPanel from './components/AgentPanel';
 import ScanModal from './components/ScanModal';
+import CodeExplorer from './components/CodeExplorer';
+import CodeGraphView from './components/CodeGraphView';
 import type { AgentEvidence } from './components/EvidencePanel';
 import { parseCalmDocument } from './lib/calmParser';
 import type { GraphNode, GraphLink } from './lib/calmParser';
 import { startHealthPoller } from './lib/healthPoller';
 import type { HealthMap } from './lib/healthPoller';
-import type { ScanResult } from './lib/scanEngine';
+import type { ScanResult, RepoCodeGraph } from './lib/scanEngine';
 import rawArch from './data/architecture.json';
 
 const defaultGraph = parseCalmDocument(rawArch as any);
 
-export default function App() {
-  const [graph, setGraph] = useState(defaultGraph);
-  const { nodes, links, flows } = graph;
+interface ScannedGraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+  repoLabel: string;
+  graphLabel: string;
+  repoId: string | null;
+  codeGraph: RepoCodeGraph | null;
+}
 
-  const [repoLabel, setRepoLabel] = useState('Banking System');
-  const [graphLabel, setGraphLabel] = useState('CALM 1.2');
+const SCANNED_STORAGE_KEY = 'visualizer-scanned-graph';
+
+export default function App() {
+  const [runtimeGraph] = useState(defaultGraph);
+
+  const [viewMode, setViewMode] = useState<'runtime' | 'scanned'>('runtime');
+  const [scannedGraph, setScannedGraph] = useState<ScannedGraphData | null>(null);
 
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
@@ -35,31 +47,83 @@ export default function App() {
   const [healthMap, setHealthMap] = useState<HealthMap>(new Map());
   const [evidenceNode, setEvidenceNode] = useState<GraphNode | null>(null);
   const [agentEvidence, setAgentEvidence] = useState<AgentEvidence | null>(null);
+  const [codeExplorerNode, setCodeExplorerNode] = useState<GraphNode | null>(null);
 
+  // Load scanned graph from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SCANNED_STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved) as ScannedGraphData;
+        setScannedGraph(data);
+      }
+    } catch { /* ignore corrupt storage */ }
+  }, []);
+
+  // Always run health poller for the runtime banking-system
   useEffect(() => startHealthPoller(setHealthMap), []);
 
+  const isRuntime = viewMode === 'runtime';
+  const { nodes: rtNodes, links: rtLinks, flows: rtFlows } = runtimeGraph;
+
+  const visibleNodeCount = useMemo(
+    () => rtNodes.filter(n => !hiddenTypes.has(n.nodeType)).length,
+    [rtNodes, hiddenTypes],
+  );
+  const visibleLinkCount = useMemo(
+    () => rtLinks.filter(l => !l.hidden && !hiddenProtocols.has(l.protocol)).length,
+    [rtLinks, hiddenProtocols],
+  );
+
   const handleScanResult = useCallback((result: ScanResult) => {
-    // Scan engine returns raw node/link objects — wrap them as a parseable graph
-    setGraph({ nodes: result.nodes, links: result.links, flows: [] });
     const repoName = result.meta.repo.split('/').slice(-1)[0] ?? result.meta.repo;
-    setRepoLabel(repoName);
-    setGraphLabel(`${result.meta.services_found} services · scanned`);
+    const newScanned: ScannedGraphData = {
+      nodes: result.nodes,
+      links: result.links,
+      repoLabel: repoName,
+      graphLabel: `${result.meta.services_found} services · scanned`,
+      repoId: result.meta.repo_id ?? null,
+      codeGraph: result.code_graph ?? null,
+    };
+    setScannedGraph(newScanned);
+    setViewMode('scanned');
     setSelectedNode(null);
     setSelectedLink(null);
     setSelectedFlow(null);
     setEvidenceNode(null);
     setAgentEvidence(null);
+    setCodeExplorerNode(null);
     setShowScan(false);
+
+    try {
+      localStorage.setItem(SCANNED_STORAGE_KEY, JSON.stringify(newScanned));
+    } catch { /* storage full or unavailable */ }
+  }, []);
+
+  const handleBackToRuntime = useCallback(() => {
+    setViewMode('runtime');
+    setSelectedNode(null);
+    setSelectedLink(null);
+    setSelectedFlow(null);
+    setEvidenceNode(null);
+    setAgentEvidence(null);
+    setCodeExplorerNode(null);
   }, []);
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
     setSelectedLink(null);
+    setEvidenceNode(null);
+    setAgentEvidence(null);
+    setCodeExplorerNode(null);
   }, []);
 
   const handleLinkClick = useCallback((link: GraphLink) => {
     setSelectedLink(link);
     setSelectedNode(null);
+    setEvidenceNode(null);
+    setAgentEvidence(null);
+    setCodeExplorerNode(null);
   }, []);
 
   const handleToggleType = useCallback((type: string) => {
@@ -78,20 +142,31 @@ export default function App() {
     });
   }, []);
 
-  const visibleNodeCount = useMemo(
-    () => nodes.filter(n => !hiddenTypes.has(n.nodeType)).length,
-    [nodes, hiddenTypes],
-  );
-  const visibleLinkCount = useMemo(
-    () => links.filter(l => !l.hidden && !hiddenProtocols.has(l.protocol)).length,
-    [links, hiddenProtocols],
-  );
+  // ── Scanned view: full-page CodeGraphView ───────────────────────────────────
+  if (!isRuntime && scannedGraph) {
+    return (
+      <>
+        <CodeGraphView
+          scannedGraph={scannedGraph}
+          onBackToRuntime={handleBackToRuntime}
+          onScan={() => setShowScan(true)}
+        />
+        {showScan && (
+          <ScanModal
+            onClose={() => setShowScan(false)}
+            onResult={handleScanResult}
+          />
+        )}
+      </>
+    );
+  }
 
+  // ── Runtime view: 3D graph + panels ─────────────────────────────────────────
   return (
     <div className="w-screen h-screen bg-[#0a0f1a] overflow-hidden relative">
       <Graph3D
-        nodes={nodes}
-        links={links}
+        nodes={rtNodes}
+        links={rtLinks}
         selectedFlow={selectedFlow}
         hiddenTypes={hiddenTypes}
         hiddenProtocols={hiddenProtocols}
@@ -104,8 +179,8 @@ export default function App() {
       <div className="absolute top-4 left-4 flex items-center gap-3 pointer-events-none">
         <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl px-4 py-2.5 flex items-center gap-4 pointer-events-auto">
           <div>
-            <span className="text-white font-bold text-sm">{repoLabel}</span>
-            <span className="text-slate-500 text-xs ml-2">{graphLabel}</span>
+            <span className="text-white font-bold text-sm">Banking System</span>
+            <span className="text-slate-500 text-xs ml-2">CALM 1.2</span>
           </div>
           <div className="w-px h-4 bg-slate-700" />
           <div className="text-slate-400 text-xs">
@@ -114,7 +189,7 @@ export default function App() {
             <span className="text-white font-medium">{visibleLinkCount}</span> edges
           </div>
           <div className="w-px h-4 bg-slate-700" />
-          <FlowSelector flows={flows} selectedFlow={selectedFlow} onChange={setSelectedFlow} />
+          <FlowSelector flows={rtFlows} selectedFlow={selectedFlow} onChange={setSelectedFlow} />
           {selectedFlow && (
             <button onClick={() => setSelectedFlow(null)} className="text-slate-500 hover:text-white">
               <X size={14} />
@@ -169,28 +244,32 @@ export default function App() {
         </div>
       </div>
 
-      {selectedNode && !evidenceNode && (
+      {selectedNode && !evidenceNode && !codeExplorerNode && (
         <NodePanel
           node={selectedNode}
-          allLinks={links}
-          allNodes={nodes}
+          allLinks={rtLinks}
+          allNodes={rtNodes}
           health={healthMap.get(selectedNode.id)}
+          hasCodeGraph={!!scannedGraph?.codeGraph || !!scannedGraph?.repoId}
           onClose={() => setSelectedNode(null)}
           onCollectEvidence={node => { setEvidenceNode(node); setSelectedNode(null); }}
+          onExploreCode={node => { setCodeExplorerNode(node); setSelectedNode(null); }}
         />
       )}
-      {selectedLink && !evidenceNode && (
+      {selectedLink && !evidenceNode && !codeExplorerNode && (
         <EdgePanel
           link={selectedLink}
-          allNodes={nodes}
+          allNodes={rtNodes}
           onClose={() => setSelectedLink(null)}
         />
       )}
-      {evidenceNode && !agentEvidence && (
+      {evidenceNode && !agentEvidence && !codeExplorerNode && (
         <EvidencePanel
           node={evidenceNode}
-          allLinks={links}
-          allNodes={nodes}
+          allLinks={rtLinks}
+          allNodes={rtNodes}
+          repoId={scannedGraph?.repoId ?? null}
+          codeGraph={scannedGraph?.codeGraph ?? null}
           onClose={() => setEvidenceNode(null)}
           onSendToAgent={ev => { setAgentEvidence(ev); setEvidenceNode(null); }}
         />
@@ -199,6 +278,14 @@ export default function App() {
         <AgentPanel
           evidence={agentEvidence}
           onClose={() => setAgentEvidence(null)}
+        />
+      )}
+      {codeExplorerNode && (
+        <CodeExplorer
+          serviceName={codeExplorerNode.name}
+          repoId={scannedGraph?.repoId ?? null}
+          codeGraph={scannedGraph?.codeGraph ?? null}
+          onClose={() => setCodeExplorerNode(null)}
         />
       )}
       {showScan && (

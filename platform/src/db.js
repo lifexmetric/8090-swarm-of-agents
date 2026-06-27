@@ -33,7 +33,8 @@ db.exec(`
     calm_ctx   TEXT,
     logs       TEXT,
     logs_note  TEXT,
-    commits    TEXT NOT NULL DEFAULT '[]'
+    commits    TEXT NOT NULL DEFAULT '[]',
+    code_graph TEXT
   );
 
   CREATE TABLE IF NOT EXISTS session_messages (
@@ -52,6 +53,13 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// Migration: add code_graph column to existing session_evidence table
+try {
+  db.exec('ALTER TABLE session_evidence ADD COLUMN code_graph TEXT');
+} catch {
+  // Column already exists
+}
 
 function prepare(sql) { return db.prepare(sql); }
 
@@ -74,8 +82,8 @@ module.exports = {
   evidence: {
     insert: prepare(`
       INSERT OR REPLACE INTO session_evidence
-        (session_id, calm_ctx, logs, logs_note, commits)
-      VALUES (?, ?, ?, ?, ?)
+        (session_id, calm_ctx, logs, logs_note, commits, code_graph)
+      VALUES (?, ?, ?, ?, ?, ?)
     `),
     get: prepare('SELECT * FROM session_evidence WHERE session_id = ?'),
   },

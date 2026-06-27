@@ -154,4 +154,25 @@ function readServiceFiles(serviceId) {
   return walkSync(serviceDir, `banking-system/${svc.folder}`);
 }
 
-module.exports = { getLogs, getCommits, readServiceFiles, SERVICE_MAP };
+// ── Code graph adapter ────────────────────────────────────────────────────────
+// Fetches the code-level graph from the scan engine for a specific service.
+// Returns null if the scan engine is unreachable or the repo hasn't been embedded.
+const SCAN_ENGINE_URL = process.env.SCAN_ENGINE_URL || 'http://localhost:8010';
+
+async function getCodeGraph(serviceId, repoId = 'banking-system') {
+  const svc = SERVICE_MAP[serviceId];
+  const serviceName = svc ? svc.folder : serviceId;
+
+  try {
+    const res = await fetch(`${SCAN_ENGINE_URL}/code-graph/${repoId}/${serviceName}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.log('[evidence] code graph fetch failed for %s: %s', serviceName, err.message);
+    return null;
+  }
+}
+
+module.exports = { getLogs, getCommits, readServiceFiles, getCodeGraph, SERVICE_MAP };

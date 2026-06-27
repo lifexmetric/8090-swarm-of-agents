@@ -1,5 +1,6 @@
 import subprocess
 import tempfile
+import re
 from pathlib import Path
 
 SKIP_DIRS = {
@@ -20,6 +21,17 @@ SERVICE_MARKERS = [
     'Dockerfile', 'go.mod', 'package.json',
     'pyproject.toml', 'setup.py', 'pom.xml', 'build.gradle',
 ]
+
+
+def repo_id_from_url(url: str) -> str:
+    """Derive a consistent repo ID from a GitHub URL.
+    e.g. https://github.com/org/my-repo -> my-repo
+    """
+    # Strip trailing .git and slashes
+    cleaned = url.rstrip('/').removesuffix('.git')
+    # Take the last path segment
+    parts = cleaned.split('/')
+    return re.sub(r'[^a-zA-Z0-9_-]', '-', parts[-1]) if parts else 'repo'
 
 
 def clone_repo(repo_url: str, pat: str | None = None) -> str:

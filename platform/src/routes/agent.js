@@ -9,16 +9,22 @@ const { createPR } = require('../agent/github');
 
 const router = Router();
 
-// POST /sessions/:id/diagnose — SSE stream of Claude diagnosis
+// POST /sessions/:id/diagnose — SSE stream of Claude diagnosis with extended thinking
 router.post('/:id/diagnose', async (req, res) => {
   const session = db.sessions.get.get(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  console.log('[diagnose] session=%s node=%s (%s)', session.id, session.node_id, session.node_name);
 
   const apiKey = getKey('anthropic_key');
   if (!apiKey) return res.status(400).json({ error: 'Anthropic API key not configured. POST /config first.' });
 
   const ev = db.evidence.get.get(req.params.id);
   if (!ev) return res.status(400).json({ error: 'No evidence stored for this session' });
+
+  const commits = JSON.parse(ev.commits);
+  console.log('[diagnose] evidence: %d commits, logs=%s, calmCtx=%s, codeGraph=%s',
+    commits.length, !!ev.logs, !!ev.calm_ctx, !!ev.code_graph);
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -29,22 +35,28 @@ router.post('/:id/diagnose', async (req, res) => {
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
   const evidence = {
-    calmCtx:  ev.calm_ctx ? JSON.parse(ev.calm_ctx) : null,
-    logs:     ev.logs,
-    logsNote: ev.logs_note,
-    commits:  JSON.parse(ev.commits),
+    calmCtx:   ev.calm_ctx ? JSON.parse(ev.calm_ctx) : null,
+    logs:      ev.logs,
+    logsNote:  ev.logs_note,
+    commits,
+    codeGraph: ev.code_graph ? JSON.parse(ev.code_graph) : null,
   };
 
   const sourceFiles = require('../evidence').readServiceFiles(session.node_id);
+  console.log('[diagnose] source files: %d', sourceFiles.length);
   const userMessage = buildPrompt(evidence, sourceFiles);
   db.messages.insert.run(req.params.id, 'user', userMessage);
 
   let fullText = '';
+  let thinkingText = '';
   let diagnosis = null;
 
   try {
     await streamDiagnosis(apiKey, SYSTEM_PROMPT, userMessage, (evt) => {
-      if (evt.type === 'text') {
+      if (evt.type === 'thinking') {
+        thinkingText += evt.text;
+        send({ type: 'thinking', text: evt.text });
+      } else if (evt.type === 'text') {
         fullText += evt.text;
         send({ type: 'text', text: evt.text });
       } else if (evt.type === 'diagnosis') {
@@ -57,17 +69,22 @@ router.post('/:id/diagnose', async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('[diagnose] stream failed: %s', err.message);
     send({ type: 'error', message: err.message });
   }
 
   // Persist assistant response
   const assistantContent = diagnosis
     ? JSON.stringify(diagnosis)
-    : fullText;
+    : fullText || thinkingText;
   db.messages.insert.run(req.params.id, 'assistant', assistantContent);
 
   if (diagnosis) {
     db.sessions.updateStatus.run('diagnosed', req.params.id);
+    console.log('[diagnose] complete: diagnosis saved, file=%s', diagnosis.file_path);
+  } else {
+    console.log('[diagnose] complete: no structured diagnosis (text=%d chars, thinking=%d chars)',
+      fullText.length, thinkingText.length);
   }
 
   res.end();

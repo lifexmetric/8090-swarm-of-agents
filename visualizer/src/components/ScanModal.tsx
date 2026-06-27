@@ -1,12 +1,22 @@
 import { useState } from 'react';
-import { X, ScanSearch, Loader, AlertCircle } from 'lucide-react';
-import { scanRepo } from '../lib/scanEngine';
-import type { ScanResult } from '../lib/scanEngine';
+import { X, ScanSearch, Loader, AlertCircle, CheckCircle, FileCode, FunctionSquare, Box } from 'lucide-react';
+import { scanRepoStream } from '../lib/scanEngine';
+import type { ScanResult, RepoSummary } from '../lib/scanEngine';
 
 interface Props {
   onClose: () => void;
   onResult: (result: ScanResult) => void;
 }
+
+const STEP_ORDER = ['cloning', 'discovering', 'embedding', 'code_graph', 'probing', 'synthesizing'] as const;
+const STEP_LABELS: Record<string, string> = {
+  cloning: 'Cloning repository',
+  discovering: 'Discovering services',
+  embedding: 'Embedding code (jina int8)',
+  code_graph: 'Extracting code graph',
+  probing: 'Running semantic probes',
+  synthesizing: 'Synthesising architecture',
+};
 
 export default function ScanModal({ onClose, onResult }: Props) {
   const [repoUrl, setRepoUrl] = useState('');
@@ -14,29 +24,51 @@ export default function ScanModal({ onClose, onResult }: Props) {
   const [pat, setPat] = useState('');
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
+  const [currentStep, setCurrentStep] = useState<string>('');
+  const [progressMsg, setProgressMsg] = useState('');
+  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<RepoSummary | null>(null);
 
   const handleScan = async () => {
     if (!repoUrl || !apiKey) return;
     setScanning(true);
     setError(null);
-    setStatus('Cloning repository...');
+    setCurrentStep('cloning');
+    setProgressMsg('');
+    setCompletedSteps(new Set());
+    setSummary(null);
 
-    try {
-      setStatus('Embedding code with nomic-embed-code...');
-      const result = await scanRepo(repoUrl, apiKey, pat || undefined);
-      setStatus(`Done — ${result.meta.nodes} nodes, ${result.meta.links} links`);
-      onResult(result);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setScanning(false);
-    }
+    await scanRepoStream(
+      repoUrl,
+      apiKey,
+      pat || undefined,
+      (step, message) => {
+        // Mark previous step as completed
+        setCompletedSteps(prev => {
+          const next = new Set(prev);
+          if (currentStep && currentStep !== step) next.add(currentStep);
+          return next;
+        });
+        setCurrentStep(step);
+        setProgressMsg(message);
+      },
+      (result) => {
+        // Mark all steps complete
+        setCompletedSteps(new Set(STEP_ORDER as readonly string[]));
+        if (result.summary) setSummary(result.summary);
+        onResult(result);
+      },
+      (msg) => {
+        setError(msg);
+      },
+    );
+
+    setScanning(false);
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-[480px] flex flex-col">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-[520px] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2">
@@ -51,9 +83,9 @@ export default function ScanModal({ onClose, onResult }: Props) {
         {/* Body */}
         <div className="px-5 py-4 space-y-3">
           <p className="text-xs text-slate-400">
-            Point the scanner at any GitHub repo. It clones it locally, embeds all code with
-            <span className="text-violet-300 font-mono"> nomic-embed-code</span>, then asks
-            Claude to extract the architecture.
+            Clones the repo, embeds all code with
+            <span className="text-violet-300 font-mono"> jina-embeddings-v2-base-code</span> (ONNX int8),
+            extracts a code-level graph with tree-sitter, then asks Claude to synthesise the architecture.
           </p>
 
           <div>
@@ -93,10 +125,62 @@ export default function ScanModal({ onClose, onResult }: Props) {
             />
           </div>
 
+          {/* Live step progress */}
           {scanning && (
-            <div className="flex items-center gap-2 text-violet-400 text-xs">
-              <Loader size={12} className="animate-spin" />
-              {status}
+            <div className="space-y-1.5 py-2">
+              {STEP_ORDER.map(step => {
+                const isDone = completedSteps.has(step);
+                const isActive = currentStep === step;
+                return (
+                  <div key={step}>
+                    <div className="flex items-center gap-2 text-xs">
+                      {isDone ? (
+                        <CheckCircle size={12} className="text-green-400 shrink-0" />
+                      ) : isActive ? (
+                        <Loader size={12} className="animate-spin text-violet-400 shrink-0" />
+                      ) : (
+                        <div className="w-3 h-3 rounded-full border border-slate-700 shrink-0" />
+                      )}
+                      <span className={isActive ? 'text-slate-200' : isDone ? 'text-slate-400' : 'text-slate-600'}>
+                        {STEP_LABELS[step]}
+                      </span>
+                    </div>
+                    {isActive && progressMsg && (
+                      <div className="ml-5 text-[10px] text-violet-400/70 font-mono py-0.5">{progressMsg}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Summary card after scan */}
+          {summary && !scanning && (
+            <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Repo Summary</div>
+              <div className="flex gap-4">
+                <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                  <FileCode size={12} className="text-violet-400" /> {summary.total_files} files
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                  <FunctionSquare size={12} className="text-cyan-400" /> {summary.total_functions} functions
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                  <Box size={12} className="text-amber-400" /> {summary.total_classes} classes
+                </span>
+              </div>
+              {Object.keys(summary.languages).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(summary.languages).map(([lang, count]) => (
+                    <span key={lang} className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                      {lang} · {count}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="text-[10px] text-slate-500">
+                {summary.services.length} services: {summary.services.map(s => s.name).join(', ')}
+              </div>
             </div>
           )}
 
@@ -115,7 +199,7 @@ export default function ScanModal({ onClose, onResult }: Props) {
             disabled={scanning}
             className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg disabled:opacity-30"
           >
-            Cancel
+            {summary ? 'Close' : 'Cancel'}
           </button>
           <button
             onClick={handleScan}

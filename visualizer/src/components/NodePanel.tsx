@@ -1,4 +1,4 @@
-import { X, Globe, Database, Layers, Server, Cpu, Network, User, Search } from 'lucide-react';
+import { X, Globe, Database, Layers, Server, Cpu, Network, User, Search, FileCode } from 'lucide-react';
 import type { GraphNode, GraphLink } from '../lib/calmParser';
 import { NODE_COLORS, NODE_TYPE_LABELS, HEALTH_DOWN_COLOR, HEALTH_UP_COLOR } from '../constants/styleMap';
 import type { NodeType } from '../constants/styleMap';
@@ -9,8 +9,10 @@ interface Props {
   allLinks: GraphLink[];
   allNodes: GraphNode[];
   health?: ServiceHealth;
+  hasCodeGraph?: boolean;
   onClose: () => void;
   onCollectEvidence?: (node: GraphNode) => void;
+  onExploreCode?: (node: GraphNode) => void;
 }
 
 const TYPE_ICONS: Record<NodeType, React.ElementType> = {
@@ -43,7 +45,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export default function NodePanel({ node, allLinks, allNodes, health, onClose, onCollectEvidence }: Props) {
+export default function NodePanel({ node, allLinks, allNodes, health, hasCodeGraph, onClose, onCollectEvidence, onExploreCode }: Props) {
   const color = NODE_COLORS[node.nodeType] ?? '#94a3b8';
   const Icon = TYPE_ICONS[node.nodeType] ?? Server;
 
@@ -186,8 +188,22 @@ export default function NodePanel({ node, allLinks, allNodes, health, onClose, o
         )}
       </div>
 
-      {health?.status === 'down' && onCollectEvidence && (
-        <div className="border-t border-slate-800 p-3 shrink-0">
+      {/* Footer actions */}
+      <div className="border-t border-slate-800 p-3 shrink-0 space-y-2">
+        {onExploreCode && (
+          <button
+            onClick={() => onExploreCode(node)}
+            className={`w-full flex items-center justify-center gap-2 border text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
+              hasCodeGraph
+                ? 'bg-cyan-900/30 hover:bg-cyan-800/50 border-cyan-700 text-cyan-300'
+                : 'bg-slate-800/40 hover:bg-slate-700/40 border-slate-700 text-slate-400'
+            }`}
+          >
+            <FileCode size={13} />
+            {hasCodeGraph ? 'Explore Code' : 'Explore Code (needs embed)'}
+          </button>
+        )}
+        {health?.status === 'down' && onCollectEvidence && (
           <button
             onClick={() => onCollectEvidence(node)}
             className="w-full flex items-center justify-center gap-2 bg-red-900/40 hover:bg-red-800/60 border border-red-700 text-red-300 text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
@@ -195,8 +211,8 @@ export default function NodePanel({ node, allLinks, allNodes, health, onClose, o
             <Search size={13} />
             Collect Evidence
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

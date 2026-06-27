@@ -7,18 +7,19 @@ const evidence = require('../evidence');
 
 const router = Router();
 
-// POST /sessions — create session, fetch evidence, store
+// POST /sessions — create session, fetch evidence (incl code graph), store
 router.post('/', async (req, res) => {
-  const { nodeId, nodeName, systemId = 'banking-system', calmCtx } = req.body ?? {};
+  const { nodeId, nodeName, systemId = 'banking-system', calmCtx, repoId } = req.body ?? {};
   if (!nodeId || !nodeName) return res.status(400).json({ error: 'nodeId and nodeName required' });
 
   const id = crypto.randomUUID();
   db.sessions.insert.run(id, nodeId, nodeName, systemId);
 
-  // Fetch evidence in parallel — both adapters are graceful
-  const [logsResult, commits] = await Promise.all([
+  // Fetch evidence in parallel — all adapters are graceful
+  const [logsResult, commits, codeGraph] = await Promise.all([
     evidence.getLogs(nodeId),
     evidence.getCommits(nodeId, systemId),
+    evidence.getCodeGraph(nodeId, repoId || systemId),
   ]);
 
   db.evidence.insert.run(
@@ -26,10 +27,19 @@ router.post('/', async (req, res) => {
     calmCtx ? JSON.stringify(calmCtx) : null,
     logsResult.available ? logsResult.content : null,
     logsResult.available ? null : logsResult.note,
-    JSON.stringify(commits)
+    JSON.stringify(commits),
+    codeGraph ? JSON.stringify(codeGraph) : null,
   );
 
-  res.json({ id, nodeId, nodeName, systemId, commitCount: commits.length, logsAvailable: logsResult.available });
+  console.log('[session] created %s for %s: %d commits, logs=%s, codeGraph=%s',
+    id, nodeId, commits.length, !!logsResult.available, !!codeGraph);
+
+  res.json({
+    id, nodeId, nodeName, systemId,
+    commitCount: commits.length,
+    logsAvailable: logsResult.available,
+    codeGraphAvailable: !!codeGraph,
+  });
 });
 
 // GET /sessions — recent sessions
