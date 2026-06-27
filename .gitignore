@@ -12,12 +12,18 @@ scan-engine/models/
 # Build outputs
 dist/
 build/
+coverage/
 
 # Platform runtime data (contains encrypted API keys)
 platform/data/
 
+# Atlas runtime data
+.atlas/
+
 # Environment files with real values
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 docker-compose.override.yml

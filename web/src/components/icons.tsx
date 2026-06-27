@@ -9,6 +9,7 @@ import {
   Radio,
   HardDrive,
   KeyRound,
+  Package,
   Webhook,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export const EDGE_ICON: Record<EdgeKind, LucideIcon> = {
   sync: ArrowRightLeft,
   async: Radio,
   db: HardDrive,
+  package: Package,
   config: SlidersHorizontal,
   auth: KeyRound,
   webhook: Webhook,

@@ -8,6 +8,7 @@ import {
   type GraphLink,
   type GraphNode,
 } from "@/lib/data";
+import { colorAlpha } from "./ui";
 
 export interface Graph3DHandle {
   focusNode: (id: string) => void;
@@ -276,7 +277,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
     return (
       <div
         ref={containerRef}
-        className="relative h-full w-full cursor-grab overflow-hidden bg-[#0c0d10] active:cursor-grabbing"
+        className="relative h-full w-full cursor-grab overflow-hidden bg-bg active:cursor-grabbing"
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -284,7 +285,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
         onDoubleClick={() => onSelectNode("")}
       >
         {/* Dot grid background */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(129,140,248,0.12)_1px,transparent_1px)] bg-[length:72px_72px] opacity-[0.08]" />
+        <div className="graph-grid pointer-events-none absolute inset-0" />
 
         <div
           className="absolute left-0 top-0 origin-top-left transition-transform duration-150"
@@ -325,7 +326,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                 orient="auto"
                 markerUnits="strokeWidth"
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#5c5e6a" />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-faint)" />
               </marker>
               <marker
                 id="arrow-critical"
@@ -336,7 +337,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                 orient="auto"
                 markerUnits="strokeWidth"
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#f87171" />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-err)" />
               </marker>
             </defs>
 
@@ -345,16 +346,16 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
               <g key={rail.label}>
                 <line
                   x1={80} y1={rail.y} x2={1400} y2={rail.y}
-                  stroke="#1e2028" strokeWidth={1}
+                  stroke="var(--color-surface-2)" strokeWidth={1}
                 />
                 <rect
                   x={80} y={rail.y - 20}
                   width={rail.label.length * 7.4 + 12} height={15}
-                  fill="#0c0d10" rx={2}
+                  fill="var(--color-bg)" rx={2}
                 />
                 <text
                   x={86} y={rail.y - 9}
-                  fill="#3a3c48"
+                  fill="var(--color-line-2)"
                   fontSize={10}
                   fontFamily="var(--font-mono)"
                   letterSpacing="0.08em"
@@ -372,7 +373,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                   cy={entryCY}
                   r={72}
                   fill="none"
-                  stroke="#818cf8"
+                  stroke="var(--color-accent)"
                   strokeWidth={1.5}
                   opacity={0}
                 >
@@ -384,7 +385,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                   cy={entryCY}
                   r={76}
                   fill="none"
-                  stroke="#818cf8"
+                  stroke="var(--color-accent)"
                   strokeWidth={0.8}
                   opacity={0}
                 >
@@ -396,7 +397,7 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                   x={entryCX}
                   y={entryPos.y + NODE.height + 18}
                   textAnchor="middle"
-                  fill="#818cf8"
+                  fill="var(--color-accent)"
                   fontSize={10}
                   fontFamily="var(--font-mono)"
                   letterSpacing="0.1em"
@@ -416,13 +417,13 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
               const path = linkPath(source, target);
               const width = active ? 2.2 + link.criticality * 0.18 : 1.1;
               const glowOpacity = active ? 0.58 : hasSelection ? 0 : 0.12;
-              const strokeColor = dim ? "#222" : isCritical ? "#f87171" : meta.color;
+              const strokeColor = dim ? "var(--color-graph-dim)" : isCritical ? "var(--color-err)" : meta.color;
               return (
                 <g key={link.id} data-graph-control="true">
                   <path
                     d={path}
                     fill="none"
-                    stroke={isCritical ? "#f87171" : meta.color}
+                    stroke={isCritical ? "var(--color-err)" : meta.color}
                     strokeWidth={active ? 14 : 9}
                     strokeOpacity={glowOpacity}
                     strokeLinecap="round"
@@ -483,50 +484,50 @@ export const Graph3D = React.forwardRef<Graph3DHandle, Graph3DProps>(
                   event.stopPropagation();
                   onDoubleClickNode?.(node.id);
                 }}
-                className="absolute cursor-pointer border bg-[#12131a] px-3 py-2 text-left transition-[border-color,background-color,opacity,box-shadow] duration-150 hover:bg-[#181a22] rounded-lg"
+                className="absolute cursor-pointer rounded-lg border bg-bg-2 px-3 py-2 text-left transition-[border-color,background-color,opacity,box-shadow] duration-150 hover:bg-surface"
                 style={{
                   left: position.x,
                   top: position.y,
                   width: NODE.width,
                   minHeight: NODE.height,
                   borderColor: isCritical
-                    ? "#f87171"
+                    ? "var(--color-err)"
                     : active
                     ? meta.color
-                    : "#2a2c36",
+                    : "var(--color-line)",
                   opacity: dim ? 0.22 : 1,
                   boxShadow: isCritical
-                    ? "0 0 28px #f8717155"
+                    ? "0 0 28px color-mix(in srgb, var(--color-err) 33%, transparent)"
                     : active
-                    ? `0 0 24px ${meta.color}33`
+                    ? `0 0 24px ${colorAlpha(meta.color, 20)}`
                     : "none",
                 }}
               >
                 <div className="mb-1.5 flex items-center gap-2">
                   <span
                     className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: isCritical ? "#f87171" : meta.color }}
+                    style={{ backgroundColor: isCritical ? "var(--color-err)" : meta.color }}
                   />
-                  <span className="truncate font-mono text-[12px] font-semibold text-[#e8e9ed]">
+                  <span className="truncate font-mono text-[12px] font-semibold text-ink">
                     {node.label}
                   </span>
                   {isEntry && !hasSelection && (
-                    <span className="ml-auto shrink-0 rounded border border-[#818cf8]/30 bg-[#818cf8]/10 px-1 font-mono text-[9px] text-[#818cf8]">
+                    <span className="ml-auto shrink-0 rounded border border-accent/30 bg-accent/10 px-1 font-mono text-[9px] text-accent">
                       entry
                     </span>
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a]">
+                  <span className="truncate font-mono text-[10px] uppercase tracking-wide text-faint">
                     {meta.group}
                   </span>
-                  <span className="font-mono text-[10px] text-[#5c5e6a]">
+                  <span className="font-mono text-[10px] text-faint">
                     {inbound} in · {outbound} out
                   </span>
                 </div>
                 {/* Hint: double-click to explore */}
                 {isSelected && (
-                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] text-[#3a3c48]">
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] text-line-2">
                     dbl-click to explore connections
                   </div>
                 )}

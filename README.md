@@ -48,6 +48,8 @@ The same scan powers both the visual map and the markdown export, so humans and 
 
 ## Run Locally
 
+### Frontend
+
 ```bash
 cd web
 npm install
@@ -55,3 +57,35 @@ npm run dev
 ```
 
 Then open the local Next.js URL shown in the terminal.
+
+### Backend
+
+The backend is a Fastify service under `api/`. It clones public GitHub repositories,
+runs deterministic JS/TS scanners, persists graph/context data in SQLite, and can
+use Backboard for synthesis when `BACKBOARD_API_KEY` is configured.
+
+```bash
+cp .env.example .env
+# Fill BACKBOARD_API_KEY in .env for real agent-backed scans.
+
+cd api
+npm install
+npm run migrate
+npm run dev
+```
+
+The default API URL is `http://localhost:3001`. The frontend reads it from
+`NEXT_PUBLIC_ATLAS_API_URL`.
+
+### Verification
+
+```bash
+cd api
+npm run typecheck
+npm test
+npm run build
+
+cd ../web
+npm run lint
+npm run build
+```

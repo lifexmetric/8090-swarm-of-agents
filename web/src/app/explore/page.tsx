@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Search, Maximize2, FileDown, X, ShieldAlert, Plus, Minus, GitMerge,
 } from "lucide-react";
@@ -22,7 +23,9 @@ import { Graph3D, type Graph3DHandle } from "@/components/Graph3D";
 import { NodePanel } from "@/components/NodePanel";
 import { LinkPanel } from "@/components/LinkPanel";
 import { Logo, GithubMark, cn } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NODE_ICON } from "@/components/icons";
+import { getScanGraph } from "@/lib/api";
 
 const ALL_KINDS = Object.keys(NODE_KIND_META) as NodeKind[];
 
@@ -35,19 +38,15 @@ const CRITICAL_PATH_NODE_IDS = new Set([
   "rbc-rail-adapter",
 ]);
 
-const criticalPathLinkIdsStatic = new Set(
-  GRAPH.links
-    .filter(
-      (l) =>
-        CRITICAL_PATH_NODE_IDS.has(l.source) &&
-        CRITICAL_PATH_NODE_IDS.has(l.target),
-    )
-    .map((l) => l.id),
-);
-
-export default function ExplorePage() {
+function ExplorePageContent() {
   const graphRef = React.useRef<Graph3DHandle>(null);
+  const searchParams = useSearchParams();
+  const scanId = searchParams.get("scanId");
+  const repoLabel = searchParams.get("repo") ?? "acme/payments-platform";
 
+  const [graphData, setGraphData] = React.useState<GraphData>(GRAPH);
+  const [loadingGraph, setLoadingGraph] = React.useState(Boolean(scanId));
+  const [graphError, setGraphError] = React.useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
@@ -58,6 +57,55 @@ export default function ExplorePage() {
   // Navigation history for drill-down exploration
   const [nodeHistory, setNodeHistory] = React.useState<GraphNode[]>([]);
   const [panelView, setPanelView] = React.useState<"overview" | "subgraph">("overview");
+
+  React.useEffect(() => {
+    if (!scanId) return;
+
+    let cancelled = false;
+    getScanGraph(scanId)
+      .then((graph) => {
+        if (cancelled) return;
+        setGraphData(graph);
+        setSelectedNodeId(null);
+        setSelectedLinkId(null);
+        setNodeHistory([]);
+        setPanelView("overview");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setGraphError(err instanceof Error ? err.message : "Unable to load scan graph.");
+        setGraphData(GRAPH);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingGraph(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+
+  const criticalPathNodeIds = React.useMemo(() => {
+    const demoNodesPresent = [...CRITICAL_PATH_NODE_IDS].every((id) =>
+      graphData.nodes.some((node) => node.id === id),
+    );
+    if (demoNodesPresent) return CRITICAL_PATH_NODE_IDS;
+    return new Set(
+      graphData.links
+        .filter((link) => link.criticality >= 5)
+        .flatMap((link) => [link.source, link.target]),
+    );
+  }, [graphData]);
+
+  const criticalPathLinkIds = React.useMemo(
+    () =>
+      new Set(
+        graphData.links
+          .filter((link) => criticalPathNodeIds.has(link.source) && criticalPathNodeIds.has(link.target))
+          .map((link) => link.id),
+      ),
+    [criticalPathNodeIds, graphData.links],
+  );
 
   // Select from main graph — resets drill history and critical path mode
   const selectNode = React.useCallback((id: string) => {
@@ -73,7 +121,7 @@ export default function ExplorePage() {
   const drillDown = React.useCallback((id: string) => {
     setSelectedNodeId((current) => {
       if (current) {
-        const currentNode = nodeById(current);
+        const currentNode = nodeById(current, graphData);
         if (currentNode) {
           setNodeHistory((h) => [...h, currentNode]);
         }
@@ -82,7 +130,7 @@ export default function ExplorePage() {
     });
     setPanelView("subgraph");
     setSelectedLinkId(null);
-  }, []);
+  }, [graphData]);
 
   // Go back one level in drill history
   const goBack = React.useCallback(() => {
@@ -113,7 +161,11 @@ export default function ExplorePage() {
   const toggleKind = (k: NodeKind) =>
     setActiveKinds((prev) => {
       const next = new Set(prev);
-      next.has(k) ? next.delete(k) : next.add(k);
+      if (next.has(k)) {
+        next.delete(k);
+      } else {
+        next.add(k);
+      }
       return next;
     });
 
@@ -135,7 +187,7 @@ export default function ExplorePage() {
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        const deps = dependenciesOf(selectedNodeId);
+        const deps = dependenciesOf(selectedNodeId, graphData);
         if (deps.length > 0) {
           const next = deps[0].target;
           setSelectedNodeId(next);
@@ -148,7 +200,7 @@ export default function ExplorePage() {
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        const parents = dependentsOf(selectedNodeId);
+        const parents = dependentsOf(selectedNodeId, graphData);
         if (parents.length > 0) {
           const prev = parents[0].source;
           setSelectedNodeId(prev);
@@ -162,11 +214,11 @@ export default function ExplorePage() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedNodeId, selectNode]);
+  }, [graphData, selectedNodeId, selectNode]);
 
   const filtered: GraphData = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    const nodes = GRAPH.nodes.filter((n) => {
+    const nodes = graphData.nodes.filter((n) => {
       if (!activeKinds.has(n.kind)) return false;
       if (highRiskOnly && n.risks.length === 0) return false;
       if (q && !(
@@ -178,16 +230,19 @@ export default function ExplorePage() {
       return true;
     });
     const ids = new Set(nodes.map((n) => n.id));
-    return { nodes, links: GRAPH.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
-  }, [query, activeKinds, highRiskOnly]);
+    return { nodes, links: graphData.links.filter((l) => ids.has(l.source) && ids.has(l.target)) };
+  }, [graphData, query, activeKinds, highRiskOnly]);
 
-  const selectedNode = selectedNodeId ? GRAPH.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
-  const selectedLink = selectedLinkId ? GRAPH.links.find((l) => l.id === selectedLinkId) ?? null : null;
+  const selectedNode = selectedNodeId ? graphData.nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+  const selectedLink = selectedLinkId ? graphData.links.find((l) => l.id === selectedLinkId) ?? null : null;
   const panelOpen = Boolean(selectedNode || selectedLink);
-  const highRiskCount = GRAPH.nodes.filter((n) => n.risks.length > 0).length;
+  const highRiskCount = graphData.nodes.filter((n) => n.risks.length > 0).length;
+  const exportHref = scanId
+    ? `/export?scanId=${encodeURIComponent(scanId)}&repo=${encodeURIComponent(repoLabel)}`
+    : "/export";
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#0c0d10]">
+    <main className="relative h-screen w-screen overflow-hidden bg-bg">
       {/* Graph canvas */}
       <div className="absolute inset-0">
         <Graph3D
@@ -199,74 +254,83 @@ export default function ExplorePage() {
           onSelectLink={selectLink}
           onDoubleClickNode={handleDoubleClickNode}
           criticalPathMode={criticalPathMode}
-          criticalPathNodeIds={CRITICAL_PATH_NODE_IDS}
-          criticalPathLinkIds={criticalPathLinkIdsStatic}
+          criticalPathNodeIds={criticalPathNodeIds}
+          criticalPathLinkIds={criticalPathLinkIds}
         />
       </div>
+
+      {(loadingGraph || graphError) && (
+        <div className="pointer-events-none absolute left-1/2 top-24 z-30 -translate-x-1/2">
+          <div className="rounded-lg border border-line bg-bg/90 px-4 py-2.5 font-mono text-[12px] text-faint backdrop-blur-sm">
+            {loadingGraph ? "Loading scanned graph…" : `Demo fallback · ${graphError}`}
+          </div>
+        </div>
+      )}
 
       {/* ── Top toolbar ── */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
         {/* Primary bar */}
-        <div className="pointer-events-auto border-b border-[#2a2c36] bg-[#0c0d10]/90 backdrop-blur-sm">
+        <div className="pointer-events-auto border-b border-line bg-bg/90 backdrop-blur-sm">
           <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-3 px-4">
             <Logo />
-            <div className="h-4 w-px bg-[#2a2c36]" />
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-[#5c5e6a]">
+            <div className="h-4 w-px bg-line" />
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] text-faint">
               <GithubMark className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden font-mono sm:inline">acme/payments-platform</span>
+              <span className="hidden truncate font-mono sm:inline">{repoLabel}</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-lg border border-[#2a2c36] bg-[#181a22]">
-                <Search className="ml-2.5 h-3.5 w-3.5 shrink-0 text-[#5c5e6a]" />
+              <div className="flex items-center gap-1 rounded-lg border border-line bg-surface">
+                <Search className="ml-2.5 h-3.5 w-3.5 shrink-0 text-faint" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search nodes…"
-                  className="w-36 bg-transparent py-1.5 pr-2 text-[13px] text-[#e8e9ed] placeholder:text-[#5c5e6a] focus:outline-none sm:w-48"
+                  className="w-36 bg-transparent py-1.5 pr-2 text-[13px] text-ink placeholder:text-faint focus:outline-none sm:w-48"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-[#5c5e6a] hover:text-[#8b8d98]">
+                  <button onClick={() => setQuery("")} aria-label="Clear" className="cursor-pointer px-1.5 text-faint hover:text-muted">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
-              <div className="flex rounded-lg border border-[#2a2c36] bg-[#181a22]">
+              <div className="flex rounded-lg border border-line bg-surface">
                 <button
                   onClick={() => graphRef.current?.zoomOut()}
                   aria-label="Zoom out"
-                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-[#2a2c36] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Minus className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => graphRef.current?.zoomIn()}
                   aria-label="Zoom in"
-                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-[#2a2c36] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] w-8 cursor-pointer items-center justify-center border-r border-line text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => { selectNode(""); graphRef.current?.resetView(); }}
                   aria-label="Reset zoom"
-                  className="flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[13px] text-[#8b8d98] transition-colors duration-150 hover:text-[#e8e9ed]"
+                  className="flex h-[29px] cursor-pointer items-center gap-1.5 px-2.5 text-[13px] text-muted transition-colors duration-150 hover:text-ink"
                 >
                   <Maximize2 className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Reset</span>
                 </button>
               </div>
               <Link
-                href="/export"
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#818cf8] px-2.5 py-1.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-[#6366f1]"
+                href={exportHref}
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-[13px] font-semibold text-white transition-opacity duration-150 hover:opacity-90"
               >
                 <FileDown className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Export context</span>
               </Link>
+              <ThemeToggle />
             </div>
           </div>
         </div>
 
         {/* Filter bar */}
-        <div className="pointer-events-auto border-b border-[#2a2c36] bg-[#0c0d10]/80 backdrop-blur-sm">
+        <div className="pointer-events-auto border-b border-line bg-bg/80 backdrop-blur-sm">
           <div className="mx-auto flex h-9 max-w-[1600px] items-center gap-1.5 overflow-x-auto px-4">
             {ALL_KINDS.map((k) => {
               const meta = NODE_KIND_META[k];
@@ -279,24 +343,24 @@ export default function ExplorePage() {
                   className={cn(
                     "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
                     on
-                      ? "border-transparent text-[#181a22]"
-                      : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
+                      ? "border-transparent"
+                      : "border-line text-faint hover:text-muted",
                   )}
-                  style={on ? { backgroundColor: meta.color, color: meta.color === "#e8e9ed" ? "#0c0d10" : "#fff" } : undefined}
+                  style={on ? { backgroundColor: meta.color, color: meta.group === "Internal" ? "var(--color-bg)" : "#fff" } : undefined}
                 >
                   <Icon className="h-3 w-3" />
                   {meta.label}
                 </button>
               );
             })}
-            <div className="h-4 w-px shrink-0 bg-[#2a2c36]" />
+            <div className="h-4 w-px shrink-0 bg-line" />
             <button
               onClick={() => setHighRiskOnly((v) => !v)}
               className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
                 highRiskOnly
-                  ? "border-[#fbbf24]/40 bg-[#fbbf24]/10 text-[#fbbf24]"
-                  : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
+                  ? "border-warn/40 bg-warn/10 text-warn"
+                  : "border-line text-faint hover:text-muted",
               )}
             >
               <ShieldAlert className="h-3 w-3" />
@@ -312,8 +376,8 @@ export default function ExplorePage() {
               className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors duration-150",
                 criticalPathMode
-                  ? "border-[#f87171]/40 bg-[#f87171]/10 text-[#f87171]"
-                  : "border-[#2a2c36] text-[#5c5e6a] hover:text-[#8b8d98]",
+                  ? "border-err/40 bg-err/10 text-err"
+                  : "border-line text-faint hover:text-muted",
               )}
               title="Highlight the critical money path through the system"
             >
@@ -326,38 +390,38 @@ export default function ExplorePage() {
 
       {/* ── Compact side legend ── */}
       <div className="pointer-events-none absolute left-3 top-28 z-20">
-        <div className="pointer-events-auto w-44 rounded-lg border border-[#2a2c36] bg-[#0c0d10]/90 p-2.5 backdrop-blur-sm">
-          <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Groups</p>
+        <div className="pointer-events-auto w-44 rounded-lg border border-line bg-bg/90 p-2.5 backdrop-blur-sm">
+          <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Groups</p>
           <div className="space-y-1.5">
             {NODE_GROUPS.map((g) => (
               <div key={g.key} className="group relative flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                 <span className="text-[11px] font-medium" style={{ color: g.color }}>{g.key}</span>
-                <span className="ml-auto font-mono text-[10px] text-[#5c5e6a]">
+                <span className="ml-auto font-mono text-[10px] text-faint">
                   {g.key === "Internal" ? "code" : g.key === "Infrastructure" ? "data" : "apis"}
                 </span>
-                <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden w-56 -translate-y-1/2 rounded-lg border border-[#2a2c36] bg-[#12131a] p-2 text-[11px] leading-relaxed text-[#8b8d98] group-hover:block">
+                <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden w-56 -translate-y-1/2 rounded-lg border border-line bg-bg-2 p-2 text-[11px] leading-relaxed text-muted group-hover:block">
                   {g.desc}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="mt-2.5 border-t border-[#2a2c36] pt-2">
-            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Edges</p>
+          <div className="mt-2.5 border-t border-line pt-2">
+            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Edges</p>
             <div className="space-y-1">
               {(Object.keys(EDGE_KIND_META) as Array<keyof typeof EDGE_KIND_META>).map((k) => (
                 <div key={k} className="flex items-center gap-2">
                   <span className="h-px w-3 shrink-0" style={{ backgroundColor: EDGE_KIND_META[k].color }} />
-                  <span className="truncate text-[10px] text-[#8b8d98]">{EDGE_KIND_META[k].label}</span>
+                  <span className="truncate text-[10px] text-muted">{EDGE_KIND_META[k].label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#2a2c36] pt-2">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line pt-2">
             {(Object.keys(CONFIDENCE_META) as Array<keyof typeof CONFIDENCE_META>).map((k) => (
-              <div key={k} className="flex items-center gap-1 text-[10px] text-[#8b8d98]">
+              <div key={k} className="flex items-center gap-1 text-[10px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CONFIDENCE_META[k].color }} />
                 {CONFIDENCE_META[k].label}
               </div>
@@ -365,8 +429,8 @@ export default function ExplorePage() {
           </div>
 
           {/* Keyboard shortcuts */}
-          <div className="mt-2.5 border-t border-[#2a2c36] pt-2">
-            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5c5e6a]">Keys</p>
+          <div className="mt-2.5 border-t border-line pt-2">
+            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-faint">Keys</p>
             <div className="space-y-1">
               {[
                 { key: "↑ / ↓", label: "Traverse" },
@@ -374,8 +438,8 @@ export default function ExplorePage() {
                 { key: "Esc", label: "Deselect" },
               ].map((s) => (
                 <div key={s.key} className="flex items-center justify-between gap-2">
-                  <span className="rounded bg-[#1e2028] px-1 font-mono text-[9px] text-[#5c5e6a]">{s.key}</span>
-                  <span className="text-[10px] text-[#5c5e6a]">{s.label}</span>
+                  <span className="rounded bg-surface-2 px-1 font-mono text-[9px] text-faint">{s.key}</span>
+                  <span className="text-[10px] text-faint">{s.label}</span>
                 </div>
               ))}
             </div>
@@ -386,7 +450,7 @@ export default function ExplorePage() {
       {/* ── Bottom-center hint ── */}
       {!panelOpen && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
-          <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/80 px-3.5 py-2 font-mono text-[12px] text-[#5c5e6a] backdrop-blur-sm">
+          <div className="rounded-lg border border-line bg-bg/80 px-3.5 py-2 font-mono text-[12px] text-faint backdrop-blur-sm">
             {criticalPathMode
               ? "Critical path highlighted · click any node to explore · Esc to clear"
               : selectedNodeId
@@ -401,7 +465,7 @@ export default function ExplorePage() {
         "pointer-events-none absolute right-3 top-28 z-10 transition-opacity duration-200",
         panelOpen && "opacity-0",
       )}>
-        <div className="rounded-lg border border-[#2a2c36] bg-[#0c0d10]/90 p-3 backdrop-blur-sm">
+        <div className="rounded-lg border border-line bg-bg/90 p-3 backdrop-blur-sm">
           <div className="flex gap-5">
             {[
               { label: "Nodes", value: filtered.nodes.length },
@@ -409,13 +473,13 @@ export default function ExplorePage() {
               { label: "External", value: filtered.nodes.filter((n) => n.kind === "external").length },
             ].map((s) => (
               <div key={s.label}>
-                <p className="font-mono text-xl font-semibold tabular-nums text-[#e8e9ed]">{s.value}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wide text-[#5c5e6a]">{s.label}</p>
+                <p className="font-mono text-xl font-semibold tabular-nums text-ink">{s.value}</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-faint">{s.label}</p>
               </div>
             ))}
           </div>
           {criticalPathMode && (
-            <p className="mt-2 font-mono text-[10px] text-[#f87171]">
+            <p className="mt-2 font-mono text-[10px] text-err">
               Critical path active
             </p>
           )}
@@ -424,11 +488,12 @@ export default function ExplorePage() {
 
       {/* ── Right detail panel ── */}
       {panelOpen && (
-        <div className="absolute right-0 top-0 z-30 h-full w-full max-w-[400px] border-l border-[#2a2c36]">
-          <div className="h-full overflow-hidden rounded-l-xl bg-[#181a22] animate-slide-right">
+        <div className="absolute right-0 top-0 z-30 h-full w-full max-w-[400px] border-l border-line">
+          <div className="h-full overflow-hidden rounded-l-xl bg-surface animate-slide-right">
             {selectedNode && (
               <NodePanel
                 node={selectedNode}
+                graphData={graphData}
                 onClose={() => selectNode("")}
                 onFocus={() => graphRef.current?.focusNode(selectedNode.id)}
                 onSelectLink={selectLink}
@@ -442,6 +507,7 @@ export default function ExplorePage() {
             {selectedLink && (
               <LinkPanel
                 link={selectedLink}
+                graphData={graphData}
                 onClose={() => selectNode("")}
                 onSelectNode={selectNode}
               />
@@ -450,5 +516,13 @@ export default function ExplorePage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <React.Suspense fallback={<main className="h-screen w-screen bg-bg" />}>
+      <ExplorePageContent />
+    </React.Suspense>
   );
 }
