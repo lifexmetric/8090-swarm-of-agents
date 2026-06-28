@@ -182,3 +182,12 @@
     border-right-color: var(--border);
   }
 }
+
+/* ── Animated connection arrows ──────────────────────────────────────────── */
+@keyframes flow {
+  to { stroke-dashoffset: -20; }
+}
+
+.arrow-flow {
+  animation: flow 0.8s linear infinite;
+}

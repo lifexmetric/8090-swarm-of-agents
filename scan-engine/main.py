@@ -46,11 +46,15 @@ class ScanRequest(BaseModel):
     repo_url: str
     github_pat: str | None = None
     anthropic_api_key: str | None = None
+    branch: str | None = None
+    folders: list[str] | None = None
 
 
 class EmbedRequest(BaseModel):
     repo_url: str
     github_pat: str | None = None
+    branch: str | None = None
+    folders: list[str] | None = None
 
 
 class ScanResponse(BaseModel):
@@ -105,10 +109,10 @@ async def embed(req: EmbedRequest):
     repo_id = repo_id_from_url(req.repo_url)
     repo_dir = None
     try:
-        print(f'[embed] cloning {req.repo_url} (repo_id={repo_id})')
-        repo_dir = clone_repo(req.repo_url, req.github_pat)
+        print(f'[embed] cloning {req.repo_url} (repo_id={repo_id}) branch={req.branch or "default"}')
+        repo_dir = clone_repo(req.repo_url, req.github_pat, req.branch)
 
-        services = discover_services(repo_dir)
+        services = discover_services(repo_dir, req.folders)
         if not services:
             raise HTTPException(400, 'No services detected — no Dockerfile / go.mod / package.json found')
         print(f'[embed] found {len(services)} service(s): {[s["name"] for s in services]}')
@@ -207,12 +211,14 @@ async def scan(req: ScanRequest):
         repo_dir = None
         try:
             # 1. Clone
-            yield sse({'type': 'progress', 'step': 'cloning', 'message': f'Cloning {req.repo_url}...'})
-            print(f'[scan] cloning {req.repo_url} (repo_id={repo_id})')
-            repo_dir = clone_repo(req.repo_url, req.github_pat)
+            branch_label = f' branch={req.branch}' if req.branch else ''
+            folders_label = f' folders={req.folders}' if req.folders else ''
+            yield sse({'type': 'progress', 'step': 'cloning', 'message': f'Cloning {req.repo_url}{branch_label}{folders_label}...'})
+            print(f'[scan] cloning {req.repo_url} (repo_id={repo_id}){branch_label}{folders_label}')
+            repo_dir = clone_repo(req.repo_url, req.github_pat, req.branch)
 
             # 2. Discover services
-            services = discover_services(repo_dir)
+            services = discover_services(repo_dir, req.folders)
             if not services:
                 yield sse({'type': 'error', 'message': 'No services detected — no Dockerfile / go.mod / package.json found'})
                 return

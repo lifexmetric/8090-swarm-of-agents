@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ScanSearch, Loader, AlertCircle, CheckCircle, FileCode, FunctionSquare, Box } from 'lucide-react';
+import { X, ScanSearch, Loader, AlertCircle, CheckCircle, FileCode, FunctionSquare, Box, GitBranch, FolderTree } from 'lucide-react';
 import { scanRepoStream } from '../lib/scanEngine';
 import type { ScanResult, RepoSummary } from '../lib/scanEngine';
 
@@ -22,6 +22,8 @@ export default function ScanModal({ onClose, onResult }: Props) {
   const [repoUrl, setRepoUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [pat, setPat] = useState('');
+  const [branch, setBranch] = useState('');
+  const [folders, setFolders] = useState('');
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<string>('');
@@ -61,6 +63,8 @@ export default function ScanModal({ onClose, onResult }: Props) {
       (msg) => {
         setError(msg);
       },
+      branch.trim() || undefined,
+      folders.trim() ? folders.split(',').map(f => f.trim()).filter(Boolean) : undefined,
     );
 
     setScanning(false);
@@ -123,6 +127,36 @@ export default function ScanModal({ onClose, onResult }: Props) {
               disabled={scanning}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 font-mono disabled:opacity-50"
             />
+          </div>
+
+          {/* Branch + Folders row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
+                <GitBranch size={11} />
+                Branch <span className="text-slate-600">(optional)</span>
+              </label>
+              <input
+                value={branch}
+                onChange={e => setBranch(e.target.value)}
+                placeholder="main"
+                disabled={scanning}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 font-mono disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
+                <FolderTree size={11} />
+                Folders <span className="text-slate-600">(optional, comma-sep)</span>
+              </label>
+              <input
+                value={folders}
+                onChange={e => setFolders(e.target.value)}
+                placeholder="scan-engine, platform"
+                disabled={scanning}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 font-mono disabled:opacity-50"
+              />
+            </div>
           </div>
 
           {/* Live step progress */}

@@ -97,6 +97,8 @@ export async function scanRepoStream(
   onProgress: (step: string, message: string) => void,
   onResult: (result: ScanResult) => void,
   onError: (message: string) => void,
+  branch?: string,
+  folders?: string[],
 ): Promise<void> {
   const res = await fetch(`${BASE}/scan`, {
     method: 'POST',
@@ -105,6 +107,8 @@ export async function scanRepoStream(
       repo_url: repoUrl,
       anthropic_api_key: anthropicApiKey,
       github_pat: githubPat || undefined,
+      branch: branch || undefined,
+      folders: folders && folders.length > 0 ? folders : undefined,
     }),
   });
   if (!res.ok) {
@@ -134,6 +138,20 @@ export async function scanRepoStream(
           if (evt.type === 'error')    onError(evt.message);
         } catch {}
       }
+    }
+  }
+
+  // Process remaining buffer — the last event may not have a trailing \n\n
+  buf += decoder.decode();
+  if (buf.trim()) {
+    for (const line of buf.split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const evt = JSON.parse(line.slice(6));
+        if (evt.type === 'progress') onProgress(evt.step, evt.message);
+        if (evt.type === 'result')   onResult(evt.data as ScanResult);
+        if (evt.type === 'error')    onError(evt.message);
+      } catch {}
     }
   }
 }

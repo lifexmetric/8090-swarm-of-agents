@@ -34,27 +34,48 @@ def repo_id_from_url(url: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_-]', '-', parts[-1]) if parts else 'repo'
 
 
-def clone_repo(repo_url: str, pat: str | None = None) -> str:
+def clone_repo(repo_url: str, pat: str | None = None, branch: str | None = None) -> str:
     """Clone repo shallow into a temp dir. Returns the temp dir path."""
     if pat and 'github.com' in repo_url:
-        repo_url = repo_url.replace('https://', f'https://x-access-token:{pat}@')
+        repo_url = repo_url.replace('https://', f'https://{pat}@')
 
     dest = tempfile.mkdtemp(prefix='scan-')
+    cmd = ['git', 'clone', '--depth=1', '--quiet']
+    if branch:
+        cmd.extend(['--branch', branch])
+    cmd.extend([repo_url, dest])
     subprocess.run(
-        ['git', 'clone', '--depth=1', '--quiet', repo_url, dest],
+        cmd,
         check=True, capture_output=True, timeout=120,
     )
     return dest
 
 
-def discover_services(root: str) -> list[dict]:
+def discover_services(root: str, folders: list[str] | None = None) -> list[dict]:
     """
     Find service folders by looking for Dockerfile / go.mod / package.json etc.
     Searches root itself and up to two levels of subdirectories.
+    
+    If folders is provided, only search within those subdirectories (relative to root).
     """
     root_path = Path(root)
     seen: set[str] = set()
     services = []
+
+    # If folders specified, only search those directories
+    search_dirs: list[Path] = []
+    if folders:
+        for f in folders:
+            f = f.strip().strip('/')
+            if not f:
+                continue
+            p = root_path / f
+            if p.exists() and p.is_dir():
+                search_dirs.append(p)
+        # Always also check root itself
+        search_dirs.append(root_path)
+    else:
+        search_dirs.append(root_path)
 
     def check(folder: Path):
         key = str(folder)
@@ -72,17 +93,18 @@ def discover_services(root: str) -> list[dict]:
                 })
                 return  # one match per folder is enough
 
-    # depth 0 (repo root itself)
-    check(root_path)
+    for search_dir in search_dirs:
+        # depth 0 (the search dir itself)
+        check(search_dir)
 
-    # depth 1
-    for d in root_path.iterdir():
-        if d.is_dir() and d.name not in SKIP_DIRS:
-            check(d)
-            # depth 2
-            for dd in d.iterdir():
-                if dd.is_dir() and dd.name not in SKIP_DIRS:
-                    check(dd)
+        # depth 1
+        for d in search_dir.iterdir():
+            if d.is_dir() and d.name not in SKIP_DIRS:
+                check(d)
+                # depth 2
+                for dd in d.iterdir():
+                    if dd.is_dir() and dd.name not in SKIP_DIRS:
+                        check(dd)
 
     return services
 
